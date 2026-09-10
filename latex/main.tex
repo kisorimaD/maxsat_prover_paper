@@ -1,0 +1,948 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{booktabs,tabularx}
+\usepackage{enumitem}
+\usepackage{needspace}
+\usepackage{flafter}
+\usepackage[section]{placeins}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!45!black,
+  citecolor=green!40!black,
+  urlcolor=blue!55!black,
+  pdftitle={A Certificate-Based Branching Analysis for MaxSAT Parameterized by the Number of Clauses},
+  pdfauthor={Anonymous author(s)},
+  pdfkeywords={MaxSAT, exact algorithms, automated branching analysis, certificates}
+}
+\emergencystretch=3em
+\widowpenalty=1000
+\clubpenalty=1000
+\lstset{basicstyle=\small\ttfamily,columns=fullflexible,
+  keepspaces=true,frame=single,framerule=0.3pt,
+  aboveskip=0.7em,belowskip=0.7em}
+
+\newcommand{\MaxSAT}{\textnormal{\textsc{MaxSAT}}}
+\newcommand{\OhStar}{O^*}
+\newcommand{\OPT}{\operatorname{OPT}}
+\newcommand{\qtarget}{\frac{12872}{10000}}
+\newcommand{\tail}[1]{?_{#1}}
+\newcommand{\ntail}[1]{?^{+}_{#1}}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{example}{Example}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% SUBMISSION: Retain anonymity or add affiliations as required by the venue.
+\title{A Certificate-Based Branching Analysis for \MaxSAT{}
+  Parameterized by the Number of Clauses}
+% \author{Anonymous author(s)}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present a pipeline for constructing and checking local branching analyses
+for exact \MaxSAT{}. Starting from a partially specified clause neighborhood,
+the generator distinguishes empty and nonempty clause tails, exposes further
+variables, and searches for branching strategies. It combines assignment
+enumeration, removal of dominated alternatives, grouping by variable
+substitutions, reductions, and recursive analysis of the resulting formulas.
+The output is a certificate recording both the coverage of the case analysis
+and the transformations used in each case. A separate checker reconstructs
+the refinements, checks local optimum identities, and evaluates branching
+inequalities with exact rational arithmetic.
+
+We apply the pipeline to the $(3,2)$-literal bottleneck in Xiao's
+$\OhStar(1.2886^m)$-time algorithm, where $m$ is the number of clauses.
+Combining generated strategies with branching lemmas from Xiao, the local
+analysis reaches the target $q=1.2872$. We prove the soundness of the certificate rules
+and state the conditions under which this local result yields an
+$\OhStar(1.2872^m)$-time algorithm. The contribution is a compositional,
+independently checkable analysis pipeline, with the improved local target
+serving as its case study.
+\end{abstract}
+
+\section{Introduction}
+
+A good branching rule for an exact algorithm must do two things: preserve an
+optimal solution among its children and reduce the instance enough to meet
+the desired running-time bound. Both tasks become harder when a useful rule
+requires several rounds of branching and reduction. The argument must also
+cover every possible local configuration, including configurations whose
+clauses contain variables outside the displayed neighborhood.
+
+We study how to automate this analysis for \MaxSAT{}, using the number of
+clauses as the measure. Our starting point is Xiao's
+$\OhStar(1.2886^m)$-time, polynomial-space algorithm~\cite{Xiao2022}.
+Its limiting case concerns a variable occurring three times positively and
+twice negatively. Replacing this case by a better local strategy offers a
+concrete test of an automated analysis tool: the target is known, the relevant
+neighborhood is small, and the surrounding algorithm supplies structural
+information that can guide the search.
+
+Our pipeline separates two trees that play different roles. A
+\emph{refinement tree} distinguishes possible clause neighborhoods. For each
+of its terminal cases, a \emph{strategy tree} describes how to reduce or branch
+on an instance in that case. The generator builds these trees from an
+analysis script. Within each selected case, it enumerates assignments,
+removes dominated choices, groups compatible assignments, and analyzes the
+residual formulas. A separate checker reads the resulting trees without
+repeating this search.
+
+The key verification step is simple. For each possible truth-value combination
+of the unknown clause tails, the checker computes the best local score before
+and after a proposed transformation. The scores must agree after accounting
+for the clauses already satisfied. This single test handles reductions and
+grouped branches through the same interface. Recurrence bounds are checked
+separately from these objective-value identities.
+
+\Needspace{9\baselineskip}
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=1.5em,itemsep=0.25em]
+  \item We give a pipeline that combines structural refinement with recursive
+    search for local \MaxSAT{} strategies, including assignment dominance,
+    substitution-based grouping, and reductions of the resulting children.
+  \item We define certificate rules for coverage, local transformations, and
+    accumulated measure decreases, and prove their compositional soundness.
+  \item We apply the pipeline at the rational target $q=1.2872$ and give an
+    explicit successful strategy from the generated analysis. We separate
+    the generated transformations from the imported results used to derive
+    the running-time bound.
+\end{enumerate}
+
+\subsection{Related work and positioning}
+\label{sec:related}
+
+Automatic branching analysis has a substantial history. Fedin and
+Kulikov~\cite{FedinKulikov2004} generated running-time proofs from supplied
+simplification rules and reported experiments for SAT, \MaxSAT{}, and
+bounded-occurrence \MaxSAT{}. Kulikov~\cite{Kulikov2005} also automated the
+discovery of simplification rules and useful splittings for SAT and \MaxSAT{}.
+Skjernaa's framework~\cite[Chapter~8]{Skjernaa2004} refines formula patterns,
+searches for reductions, and considers branching on variable values and on
+whether pairs of variables are equal or different. Thus automatic case
+analysis, reduction discovery, and branching beyond individual assignments
+are established ideas.
+
+More recently, \v{C}erven\'y and Such\'y~\cite{CervenySuchy2023} generated
+parameterized branching algorithms for $d$-Path Vertex Cover. Gao et
+al.~\cite{GaoEtAl2024} formulate local branching-rule selection for Maximum
+Independent Set as a weighted set-cover problem. These works also motivate
+searching for a collection of alternatives rather than choosing a single
+branching variable.
+
+Our focus is the integration of clause-tail refinements, recursive analysis
+of substitution-generated residual CNFs, and a separate checker for both
+coverage and local optimum identities. In particular, the certificate records
+actual child formulas and their composition, so a newly added search heuristic
+does not require a corresponding heuristic-specific verification rule. We
+present this combination for Xiao's bottleneck; we do not claim that deeper
+search, dominance, or grouping alone is new.
+
+The underlying \MaxSAT{} algorithm builds on the clause-measure analyses of
+Bansal and Raman~\cite{BansalRaman1999}, Chen and Kanj~\cite{ChenKanj2004},
+and Xu et al.~\cite{XuEtAl2019}; related resolution techniques appear in
+Chen, Xu, and Wang~\cite{ChenXuWang2017}. Other parameterizations, including
+those studied by Bliznets and Golovnev~\cite{BliznetsGolovnev2012}, lead to
+different bounds. General background on branching recurrences is provided by
+Fomin and Kratsch~\cite{FominKratsch2010}.
+
+Finally, proof logging for \MaxSAT{} can certify optimum-preserving
+preprocessing, including through the VeriPB and CakePB
+systems~\cite{IhalainenEtAl2024}. Our certificate has a different target: a
+local case analysis and its recurrence for a family of instances. Its semantic
+checks enumerate small local truth tables, while pseudo-Boolean proof logging
+supports reasoning about individual, potentially large solver instances.
+
+\section{Preliminaries and the target case}
+\label{sec:preliminaries}
+
+We consider unweighted \MaxSAT{}. A formula $F$ is a multiset of clauses,
+and a clause is a disjunction of literals. Equal clauses are retained with
+multiplicity. Duplicate literals within a clause can be removed; tautological
+clauses can be removed with an objective offset of one each, and empty clauses
+with offset zero. We assume this normalization at the start of the algorithm.
+Write $m=|F|$ for the resulting number of clauses and
+\[
+  \OPT(F)=\max_{\alpha}\operatorname{sat}(F,\alpha),
+\]
+where $\alpha$ ranges over all assignments and $\operatorname{sat}$ counts
+satisfied clauses with multiplicity. We describe transformations of the
+optimum directly; equivalently, the decision problem asks whether
+$\OPT(F)\ge k$.
+
+A literal $x$ has degree $(i,j)$ if it occurs in $i$ clauses and its complement
+$\bar x$ in $j$ clauses. The complementary literal has degree $(j,i)$.
+Following Xiao, an $(i,1)$-literal is a \emph{singleton} when its unique
+negative occurrence is the unit clause $(\bar x)$.
+
+\subsection{Scores and measure decreases}
+
+A correct branching step produces formulas $F_i$ and nonnegative integer
+\emph{offsets} $s_i$ such that
+\[
+  \OPT(F)=\max_i\bigl(s_i+\OPT(F_i)\bigr).
+\]
+Its \emph{measure decreases} are $d_i=|F|-|F_i|$. These need not equal the
+offsets: an empty false clause contributes to $d_i$ but not to $s_i$.
+For example, assigning $x=1$ in $(x)(\bar x)$ gives $s=1$ and $d=2$.
+Juxtaposition of clauses denotes their conjunction, with each occurrence
+counted separately.
+
+For a rational target $q>1$, a vector of positive integer decreases is
+\emph{$q$-admissible} when
+\begin{equation}
+  \sum_{i=1}^{r}q^{-d_i}\le 1.
+  \label{eq:target}
+\end{equation}
+We use $q=12872/10000=1.2872$ and check this inequality exactly. The notation
+$\OhStar$ suppresses factors polynomial in the input length.
+
+\begin{lemma}[Branching recurrence]
+\label{lem:recurrence}
+Suppose each recursive step has positive decreases satisfying
+\cref{eq:target}, and the work at each node, including any intervening
+reductions, is polynomial in the input length. Then the running time is
+$\OhStar(q^m)$.
+\end{lemma}
+\begin{proof}
+Induction on $m$ bounds the number of leaves by $q^m$: an internal node has
+at most $\sum_i q^{m-d_i}\le q^m$ descendant leaves. Each root-to-leaf path
+has at most $m$ recursive edges, since every decrease is positive. The number
+of nodes is therefore at most $(m+1)q^m$. Polynomial work per node gives
+the claimed bound.
+\end{proof}
+
+\subsection{\texorpdfstring{The $(3,2)$-literal bottleneck}{The (3,2)-literal bottleneck}}
+\label{sec:bottleneck}
+
+Xiao's algorithm applies its reductions and branching cases in a fixed order.
+Step~5 handles a $(3,2)$-literal $x$, whose incident clauses are
+\begin{equation}
+ (x\vee C_1)(x\vee C_2)(x\vee C_3)
+ (\bar x\vee D_1)(\bar x\vee D_2).
+ \label{eq:neighborhood}
+\end{equation}
+Step~5.4, where $D_1$ and $D_2$ contain only degree-five variables, gives the
+limiting vector $(6,6,5,5)$~\cite[Section~4]{Xiao2022}. Other cases motivate
+the chosen target: for example, $(11,3,3)$ has branching factor approximately
+$1.287190881$, just below $1.2872$.
+
+The generator begins with the five-clause pattern in
+\cref{eq:neighborhood}, allowing each displayed tail to be empty. It can
+therefore encounter cases covered by neighboring steps as well as the intended
+bottleneck. The admissible degrees of newly exposed literals are part of the
+analysis configuration. The exact root pattern and the degree list used by
+\texttt{solve.txt} are given in \cref{sec:configuration}; their connection to
+Xiao's ordered algorithm is separated from the local checking argument in
+\cref{sec:global}.
+
+\Needspace{8\baselineskip}
+\section{Pipeline overview and a worked example}
+\label{sec:overview}
+
+A \emph{template} displays selected variables and uses $?$ for the remaining
+part of a clause. The symbol $?^+$ means that this part contains at least one
+literal. These marks describe syntax: $?^+$ can still be false under an
+assignment. Subscripts identify different tails when their identities matter.
+All occurrences of a selected variable are displayed, including occurrences
+outside the original five clauses.
+
+The refinement tree first asks structural questions. Is a chosen tail empty?
+If not, which degree can a literal in it have, and where can its other
+occurrences lie? Each answer gives a child template. The strategy search then
+asks an optimization question: which assignments or groups of assignments
+cover an optimal solution with a sufficiently good branching vector?
+\Cref{fig:pipeline} summarizes the two stages.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,node distance=5mm,
+ box/.style={draw,rounded corners=2pt,align=center,font=\small,
+             minimum height=12mm,text width=30mm}]
+ \node[box] (root) {Root template\\and script};
+ \node[box,right=of root] (refine) {Structural\\refinements};
+ \node[box,right=of refine] (search) {Local strategy\\search};
+ \node[box,right=of search] (check) {Certificate\\checker};
+ \draw[->] (root)--(refine);
+ \draw[->] (refine)--(search);
+ \draw[->] (search)--(check);
+ \draw[->] (search.south) -- ++(0,-0.5) -|
+   node[pos=0.25,below,font=\scriptsize]{unresolved cases: expose more structure}
+   (refine.south);
+\end{tikzpicture}
+\caption{The script selects refinements and search budgets. The generator
+constructs local strategies; the checker validates the resulting certificate.}
+\label{fig:pipeline}
+\end{figure}
+
+\begin{example}[A grouped branch from the certificate]
+\label{ex:group}
+Consider the following template, obtained by exposing a $(3,1)$-singleton
+$y$ in the two negative clauses of the root:
+\begin{equation}
+\begin{split}
+ P={}&(x\vee\tail{1})(x\vee\tail{2})(x\vee\tail{3})\\
+     & (\bar x\vee y\vee\tail{4})(\bar x\vee y\vee\tail{5})
+       (y\vee\tail{6})(\bar y).
+\end{split}
+\label{eq:example-parent}
+\end{equation}
+The four assignments to $(x,y)$ need only two alternatives. The assignments
+$(0,0)$ and $(1,0)$ are grouped by fixing $y=0$ and leaving $x$ free. When
+$y=1$, changing $x$ from $0$ to $1$ cannot lose a satisfied clause: the two
+negative $x$-clauses are already satisfied by $y$. Thus $(0,1)$ is dominated
+by $(1,1)$.
+
+For the first alternative, let
+\[
+ H=(x\vee\tail{1})(x\vee\tail{2})(x\vee\tail{3})
+   (\bar x\vee\tail{4})(\bar x\vee\tail{5})(\tail{6}).
+\]
+The unit clause $(\bar y)$ contributes offset~1, and all six clauses of $H$
+remain in the recursive formula, including the tail-only clause
+$(\tail{6})$. The second alternative satisfies six clauses and falsifies
+$(\bar y)$, leaving no local clause. It has offset~6 and decrease~7.
+Consequently, for every choice of tail values,
+\begin{equation}
+ \OPT(P)=\max\{1+\OPT(H),\,6\}.
+ \label{eq:example-identity}
+\end{equation}
+Here and in this example only, the fixed tail values are implicit in $\OPT$.
+The vector is $(1,7)$, and $q^{-1}+q^{-7}<0.948<1$ at $q=1.2872$.
+\end{example}
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,
+ every node/.style={align=center,font=\small},
+ case/.style={draw,rounded corners=2pt,inner sep=6pt}]
+ \node[case] (p) {$P$ from \cref{eq:example-parent}};
+ \node[case,below left=13mm and 10mm of p] (h) {$H$; recursive call\\$s=1,\ d=1$};
+ \node[case,below right=13mm and 10mm of p] (e) {Empty local formula; recursive call\\$s=6,\ d=7$};
+ \draw[->] (p)--node[above left]{$y=0$, $x$ free}(h);
+ \draw[->] (p)--node[above right]{$x=y=1$}(e);
+\end{tikzpicture}
+\caption{A strategy extracted from the existing certificate, with variable
+and tail names relabeled. The external part of the instance remains to be
+solved even when the local formula is empty.}
+\label{fig:example}
+\end{figure}
+
+This example also explains why the generator constructs residual formulas.
+A grouped alternative can retain a free variable, so further reductions and
+branching can improve its contribution to the final vector. The search can
+continue below $H$ instead of treating the group as an indivisible leaf.
+
+\section{Templates and certificate rules}
+\label{sec:templates}
+\label{sec:certificate}
+
+We now formalize the two checks used above: refinements cover the relevant
+instances, and strategies preserve their optimum. We use $F$ for a complete
+recursive formula and $P$ for its displayed template.
+
+\subsection{Unknown tails and the surrounding formula}
+
+A concrete instance matches $P$ if it can be written as $F=P[T]\uplus E$.
+Here $P[T]$ replaces each tail by a disjunction of literals on unselected
+variables, and $E$ is the multiset of remaining clauses. No selected variable
+occurs in a tail or in $E$. Repeated tail identifiers denote the same
+disjunction. A $?^+$ tail must be nonempty; a $?$ tail may be empty. Matching
+also respects any degree and singleton restrictions used by the analysis.
+
+Within a strategy, tail identities are preserved across transformations:
+a child may omit a tail but cannot introduce an unrelated one. Structural
+refinement has a different role. When a variable is exposed from a tail,
+the child's tail describes the remainder after that exposure, and the displayed
+fragment may acquire further clauses from $E$. Matching is always interpreted
+on the same complete instance, even though its displayed fragment changes.
+
+For a Boolean vector $\tau$ indexed by the tails, define the local score
+\begin{equation}
+ B_P(\tau)=\max_{\alpha}\operatorname{sat}(P,\alpha,\tau),
+ \label{eq:local-score}
+\end{equation}
+where $\alpha$ assigns the selected variables. Tails are evaluated as Boolean
+inputs; a clause made true by a tail still counts as one satisfied clause.
+Different tails may share hidden variables in a concrete instance. Checking
+all Boolean vectors $\tau$ includes every realizable combination and may
+therefore reject some otherwise valid transformations, but cannot accept an
+invalid one for this reason.
+
+\subsection{Structural refinements}
+\label{sec:refinements}
+
+Refinements distinguish formula structure without making a Boolean assignment.
+The two basic operations are shown in \cref{fig:refinement}.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small,align=center}]
+ \node (p) at (0,0) {$(C\vee ?)$};
+ \node (empty) at (-2.1,-1.2) {$(C)$};
+ \node (nonempty) at (2.1,-1.2) {$(C\vee ?^+)$};
+ \node (expose) at (2.1,-2.5) {$(C\vee y\vee ?)$\\and every placement of the other occurrences of $y$};
+ \draw[->] (p)--node[above left]{empty tail}(empty);
+ \draw[->] (p)--node[above right]{nonempty tail}(nonempty);
+ \draw[->] (nonempty)--node[right]{expose a literal $y$}(expose);
+\end{tikzpicture}
+\caption{Topological refinement nodes. If $C$ is nonempty, the left child is
+an ordinary clause, not an empty clause. After exposing one literal from
+$?^+$, the remaining tail is $?$ and may be empty.}
+\label{fig:refinement}
+\end{figure}
+
+\paragraph{Tail split.}
+Replace a chosen $?$ by the two cases ``empty'' and $?^+$. These cover every
+concrete tail. This is recorded as \texttt{tail\_empty\_or\_nonempty}.
+
+\paragraph{Variable exposure.}
+Choose a literal from a nonempty tail and name it $y$. For each allowed
+oriented degree $(i,j)$, enumerate all placements of $y$ and $\bar y$ in
+existing clause tails, and add clauses for the remaining occurrences.
+The selected clause must contain $y$; singleton restrictions fix the unique
+negative occurrence to a unit clause. The remaining tail in each affected
+clause may be empty. Each concrete occurrence pattern is among these choices,
+provided the degree list covers the literals that can be selected.
+
+The format combines a tail split and these exposures in
+\texttt{expose\_at\_clause}: an empty child is included for $?$ and omitted
+for $?^+$. Exposure is restricted to templates with distinct, clause-local
+single tails. An initial variable declaration constructs the root family;
+it is not a refinement of arbitrary formulas.
+
+The coverage requirement can be stated without a separate semantics for
+fragments: \emph{every complete instance matching the parent and its
+structural restrictions must match at least one child}. Exposing $y$ merely
+moves all its occurrences into the displayed fragment of that same instance.
+The checker regenerates the child templates, compares them up to renaming,
+and rejects missing, extra, or duplicate cases. In format version~2 the
+allowed degree list is recorded in the exposure node. Its completeness under
+the intended structural restrictions is a mathematical premise, whereas
+faithful enumeration of its incidences is checked computationally.
+
+\subsection{Local strategies}
+
+The certificate has four operations: refinement, decomposition, recursive
+call, and imported lemma application. Decompositions have two forms.
+
+\paragraph{Assignment decomposition.}
+The alternatives assign a selected variable $x$ to $0$ and $1$. The checker
+simplifies both children and recomputes their offsets and decreases. Suppose
+an assignment leaves a displayed fragment $P_i$ and transfers a multiset $R_i$
+of tail-only clauses to the surrounding formula. Then
+\begin{equation}
+ F_i=P_i[T]\uplus E\uplus R_i[T],\qquad
+ d_i=|P|-|P_i|-|R_i|.
+ \label{eq:transfer}
+\end{equation}
+Satisfied clauses contribute to $s_i$; empty false clauses contribute only to
+$d_i$. The transferred clauses remain part of the recursive instance.
+For example, setting $x=0$ in $(x\vee ?)(\bar x)$ transfers $(?)$ and gives
+$s=d=1$, even though no selected variable remains.
+
+\paragraph{Semantic decomposition.}
+The certificate supplies children $H_1,\ldots,H_r$ and offsets $s_i$. The
+checker accepts the transformation when
+\begin{equation}
+ B_P(\tau)=\max_{1\le i\le r}\bigl(s_i+B_{H_i}(\tau)\bigr)
+ \quad\text{for every }\tau.
+ \label{eq:semantic-decomposition}
+\end{equation}
+Every child uses only parent tails and selected or fresh local variables.
+Here the surrounding formula is unchanged, so tail-only clauses that remain
+must be included in $H_i$, as in \cref{ex:group}. The decrease is
+$d_i=|P|-|H_i|$. A one-child decomposition describes a reduction; its offset
+can also be inferred if $B_P-B_{H_1}$ is a constant nonnegative integer.
+
+\Needspace{13\baselineskip}
+\begin{lemma}[Replacement inside a formula]
+\label{lem:contextual-replacement}
+Suppose \cref{eq:semantic-decomposition} holds and the local variables of the
+parent and children occur nowhere in the surrounding formula or the concrete
+tails. Then replacing $P[T]$ by the alternatives $(H_i[T],s_i)$ preserves the
+optimum of $P[T]\uplus E$.
+\end{lemma}
+\begin{proof}
+Fix an assignment $\beta$ to all external variables. It gives tail values
+$\tau_\beta$ and satisfies some $e(\beta)$ clauses in $E$. The parent optimum
+is
+\[
+ \max_\beta\bigl(e(\beta)+B_P(\tau_\beta)\bigr)
+ =\max_i\left(s_i+
+   \max_\beta\bigl(e(\beta)+B_{H_i}(\tau_\beta)\bigr)\right),
+\]
+using \cref{eq:semantic-decomposition}. The expression on the right is the
+best shifted optimum of a child in the same surrounding formula.
+\end{proof}
+
+\paragraph{Recursive call and imported lemma.}
+A \texttt{call} ends the local analysis and invokes the global algorithm on
+the remaining complete formula. It adds zero to the decrease already
+accumulated on its path. An imported lemma application, encoded as
+\texttt{assumption}, supplies a named branching vector instead. The checker
+records its name, formula, vector, and tree path; its mathematical
+justification comes from the cited branching result and its applicability to
+the current instance. The imported results are Xiao's Lemmas~2--4 and
+Step~5.1, together with the repeated Lemma~3 argument in Step~5.5.
+\Cref{tab:dependencies} gives the correspondence to the certificate names.
+
+\begin{table}[!htbp]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Certificate name & Mathematical dependency \\
+\midrule
+\texttt{lemma2} & Xiao's Lemma~2 for an $(i,1)$ non-singleton. \\
+\texttt{lemma3} & Xiao's Lemma~3 for a degree-three variable. \\
+\texttt{lemma4} & Xiao's Lemma~4 for specified unit occurrences. \\
+\texttt{double\_lemma3} & The composition of Lemma~3 used in Step~5.5,
+with the second singleton preserved in the resolution child. \\
+\texttt{step5.1} & The unit-clause case for a $(3,2)$-literal. \\
+\bottomrule
+\end{tabularx}
+\caption{Imported branching arguments, with source names retained for tracing
+certificate records to Xiao~\cite{Xiao2022}. Each use requires the source
+hypotheses, including any reduction-or-branch alternative and the claimed
+decreases in the complete instance. The checker logs these uses rather than
+reconstructing their children or verifying their applicability.}
+\label{tab:dependencies}
+\end{table}
+
+\paragraph{Why Lemma 3 can be used twice.}
+Consider the branching case of Lemma~3 for a $(2,1)$-singleton $y_1$.
+Its resolution child replaces
+\[
+ (y_1\vee A)(y_1\vee B)(\bar y_1)
+ \quad\text{by}\quad (A)(B)
+\]
+with offset and decrease one. In this case $A$ and $B$ are nonempty; short
+clauses that trigger the source reductions are handled before this branching
+case. Removing $y_1$ from these two clauses preserves every occurrence of any
+other variable, since clause multiplicities are retained. In particular, a
+distinct $(2,1)$-singleton $y_2$ retains its two positive occurrences and its
+negative unit clause. When the branching case of Lemma~3 applies again, the
+two nested vectors $(1,8)$ give
+\[
+ (8,\ 1+8,\ 1+1)=(8,9,2).
+\]
+This is the composition used in Xiao's Step~5.5. The reduction alternatives
+of the imported lemmas must still be handled as reductions when they apply;
+the calculation above describes their nested branching case.
+
+\subsection{Composition and soundness}
+\label{sec:checker}
+
+A decomposition edge with decrease $d$ followed by a child vector
+$(e_1,\ldots,e_t)$ contributes $(d+e_1,\ldots,d+e_t)$ to the enclosing
+strategy. Concatenating the vectors of all alternatives gives its leaf
+vector. Only this accumulated vector must have positive entries and satisfy
+\cref{eq:target}; an intermediate reduction may have decrease zero.
+Refinement children are separate structural cases, so their vectors are
+checked separately, not concatenated.
+
+\Needspace{17\baselineskip}
+\begin{theorem}[Local certificate soundness]
+\label{thm:local-soundness}
+Let a finite certificate pass the refinement, decomposition, and vector
+checks above at target $q$. Suppose its exposure degree lists are complete
+under the stated structural restrictions, and each recorded imported lemma
+admits a correct recursive strategy with at least the recorded decreases for
+every complete instance to which it is applied. Then every such instance
+matching the root has an optimum-preserving local strategy whose accumulated
+decreases are $q$-admissible.
+\end{theorem}
+\begin{proof}
+Induct over the certificate. A tail split covers its parent, and variable
+exposure enumerates every permitted incidence pattern. Thus at least one
+refinement child applies to each matching instance. Assignment decomposition
+is exhaustive, with the clause accounting in \cref{eq:transfer}. Semantic
+decomposition preserves the optimum by \cref{lem:contextual-replacement}.
+Calls end a local path, and imported applications use the stated hypothesis.
+Edge decreases telescope along each path; larger actual decreases can only
+improve \cref{eq:target}. The check at each strategy root establishes the
+claimed recurrence.
+\end{proof}
+
+\section{Automated search and implementation}
+\label{sec:automation}
+
+The C++ generator maintains a frontier of unresolved templates. The analysis
+script chooses which tails to expose and when to run a search pass. Each pass
+first tries a cheap enumeration-based strategy, then applies the requested
+stronger analysis to the remaining templates. Successful cases are removed
+from the frontier and their proof trees are logged. This division lets a short
+script direct the structural analysis while the program searches the local
+strategies automatically.
+
+\subsection{Dominance, grouping, and recursive search}
+
+For a selected set of variables, the generator enumerates assignments and
+records which clauses are satisfied, which become empty, and which remain
+unresolved. It removes an assignment if another choice is at least as good
+for every possible tail valuation. The implementation uses clause masks for
+these comparisons and records them as \emph{subsumptions}. This is dominance
+among assignment alternatives, not unrestricted deletion of subsumed CNF
+clauses in \MaxSAT{}.
+
+The surviving assignments are candidates for grouping. A group is represented
+by substituting each selected variable with a constant or a signed fresh
+variable:
+\begin{equation}
+ x_j\longmapsto 0,\ 1,\ u_1,\ \bar u_1,\ldots,u_t,\bar u_t.
+ \label{eq:substitution}
+\end{equation}
+For example, $\{(0,0),(1,0)\}$ is represented by $(x,y)=(u,0)$, and
+$\{(0,1),(1,0)\}$ by $(x,y)=(u,\bar u)$. Substitution produces an ordinary
+residual CNF to which reductions and further branching can be applied.
+The group must be exactly the image of the substitution; arbitrary affine
+constraints such as $x_3=u_1\oplus u_2$ are outside this representation.
+
+The recursive variable search tries each available pivot and analyzes both
+assignment children up to the requested depth. For each child it may either
+stop with a call or retain its deeper analysis. Thus a useful strategy can
+be asymmetric. Grouped residuals also receive reductions and child analysis;
+the group pass includes an ordinary one-level variable search as a baseline.
+The depth parameters bound the search for an assignment tree, not the depth
+of the final global algorithm.
+
+A candidate is evaluated by its accumulated leaf vector. Floating-point
+branching factors guide the C++ search; certificate acceptance uses the exact
+rational target. Reductions that remove clauses can end in a recursive call.
+The implemented zero-clause-decrease reductions eliminate a variable before
+continuing locally. Assignment depth limits and these decreases make each
+such local search finite. The outer refinement schedule is supplied by the
+script; the pipeline makes no completeness claim about the search for a
+strategy at an arbitrary smaller target.
+
+\subsection{Certificate construction and checking}
+
+The generator logs the chosen refinements and strategies in JSON Lines. An
+assembler connects these records into one tree and rejects unresolved cases.
+The resulting JSON certificate is read by a separate Python checker. Formula
+normalization, refinement enumeration, assignment simplification, optimum
+tables, and rational vector arithmetic are implemented independently of the
+C++ search. Four certificate operations suffice because proposed reductions,
+dominance eliminations, and grouped branches share
+\cref{eq:semantic-decomposition}.
+
+For a template with $a$ local variables, $t$ tails, and representation length
+$\ell(P)$, a straightforward optimum-table computation takes
+$O(2^{a+t}\ell(P))$ time. This exponential work is
+confined to the finite local patterns used during offline verification. Once
+a certificate is fixed, its tables and tree sizes are constants with respect
+to the size of a future input instance.
+
+The checker uses NumPy integer arrays for the score tables. It enforces a
+limit of 32767 clauses per local formula, stores scores in signed 16-bit
+arrays, and performs validated offset additions and differences in signed
+32-bit arrays. Branching inequalities use exact rational arithmetic. The
+trusted implementation comprises the checker and its Python, JSON, and NumPy
+runtime; it is not a formally verified implementation of the calculus.
+
+\section{The generated analysis and its global consequence}
+\label{sec:global}
+
+\subsection{Root family and analysis script}
+\label{sec:configuration}
+
+The root declared by \texttt{solve.txt} is
+\begin{equation}
+ P_0=(x\vee\tail{1})(x\vee\tail{2})(x\vee\tail{3})
+     (\bar x\vee\tail{4})(\bar x\vee\tail{5}).
+ \label{eq:root}
+\end{equation}
+All five tails are initially arbitrary. The default exposure classes in this
+session are
+\[
+ (3,1)\text{-singleton},\quad (2,2),\quad (3,2),\quad
+ (2,3),\quad (4,1)\text{-singleton}.
+\]
+Degrees are oriented toward the literal selected in the clause. The session
+first exposes $y$ in a clause containing $\bar x$. It then exposes $z$ in a
+clause containing $\bar x$ but not $y$, interleaving these refinements with
+strategy searches. The commands are reproduced in \cref{fig:session}; blank
+lines after \texttt{addpos} are part of its clause-selection input.
+
+\begin{figure}[!htbp]
+\centering
+\begin{minipage}{0.44\linewidth}
+\begin{lstlisting}
+set 1.2872
+
+add x 3 2 a
+addpos y
+-x
+
+branch
+addpos z
+-x
+y
+xiao_branch 1
+xiao_branch 2
+branch
+empty_divide -1
+branch
+
+print 0
+exit
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}{0.51\linewidth}\small\raggedright
+\texttt{add} declares the root; \texttt{a} allows arbitrary tails.
+
+\medskip
+\texttt{addpos} reads a name, required clause literals, and excluded clause
+literals. It distinguishes empty tails and enumerates variable exposures.
+
+\medskip
+\texttt{branch} runs enumeration and grouping.
+\texttt{xiao\_branch 1} and \texttt{xiao\_branch 2} request recursive variable
+searches of depths one and two.
+
+\medskip
+\texttt{empty\_divide -1} refines eligible tails in the unresolved frontier.
+The last \texttt{branch} searches the resulting cases.
+\end{minipage}
+\caption{The analysis session in \texttt{solve.txt}. The script controls the
+refinement schedule; local strategies are selected by the generator.}
+\label{fig:session}
+\end{figure}
+
+The completed local analysis reaches $q=1.2872$ using the imported results
+in \cref{tab:dependencies}. \Cref{ex:group} gives one of its
+explicit strategies, with no imported application in that strategy. For a
+complete certificate, every refinement leaf must have a strategy passing the
+local vector check. This is the computational result to which
+\cref{thm:local-soundness} applies.
+
+\FloatBarrier
+\subsection{From a local strategy to a running-time bound}
+
+We retain Xiao's reductions and all ordered cases except Step~5.4.
+Their connection to the generated analysis can be made explicit.
+
+\paragraph{Coverage.}
+At the start of Step~5, Xiao's preceding reductions and Steps~1--4 leave only
+$(2,2)$-variables, $(3,2)$-variables, and $(3,1)$- or $(4,1)$-singletons
+\cite[Section~4.6]{Xiao2022}. A singleton's negative literal occurs only in its
+own unit clause, so it cannot be a hidden literal in a clause with a selected
+variable. Orienting a newly exposed literal toward the selected clause gives
+exactly the five classes in \cref{sec:configuration}. The initial five
+occurrences of $x$ are precisely \cref{eq:root}. Thus every instance reaching
+Step~5.4 matches the root under these restrictions. Structural refinements
+only reveal the same instance, so the degree restrictions remain valid
+throughout that refinement tree.
+
+\paragraph{The other recurrences.}
+\Cref{tab:global-vectors} checks the distinct vectors outside Step~5.4 in
+Xiao's global case table. Every check uses rational arithmetic; the displayed
+numbers are upper bounds rounded upward to six decimal places. In particular,
+both Steps~5.2 and~6.3 use $(11,3,3)$ and satisfy the target. The terminal
+Step~7 takes $\OhStar(1.2576^m)$ time by Xiao's Lemma~5, which is within the
+same bound.
+
+\begin{table}[!htbp]
+\centering\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Xiao's steps & Branching vector & Upper bound on $\sum_i q^{-d_i}$ \\
+\midrule
+1, 5.3, 6.2 & $(6,1)$ & $0.996729$ \\
+2 & $(3,3)$ & $0.937761$ \\
+3 & $(8,1)$ & $0.909569$ \\
+4 & $(5,2)$ & $0.886532$ \\
+5.1, 6.1 & $(4,2)$ & $0.967807$ \\
+5.2, 6.3 & $(11,3,3)$ & $0.999976$ \\
+5.5 & $(11,10,4,3)$ & $0.975442$ \\
+6.4 & $(18,18,11,11,11,11,4,4)$ & $0.998639$ \\
+\bottomrule
+\end{tabular}
+\caption{The unchanged cases at $q=12872/10000$. Vectors are taken from
+Xiao~\cite[Table~3]{Xiao2022}; the rational checks isolate Step~5.4 as the
+case to replace. }
+\label{tab:global-vectors}
+\end{table}
+
+\paragraph{Using a fixed certificate.}
+The completed certificate is fixed independently of the input size. A
+refinement inspects whether a concrete tail is empty or selects a literal
+from it, scans its occurrences, and follows a matching child. Even enumerating
+all mappings of a fixed number of displayed variables takes polynomial time
+in the input length. The recorded assignments and substitutions are performed
+on the concrete clauses, with fresh local variables chosen outside the
+instance. Tail-only clauses remain in the recursive formula as in
+\cref{eq:transfer}. A strategy has fixed finite depth and ends in calls whose
+accumulated decreases are positive. Imported routines use the polynomial
+operations of the source algorithm. These facts give polynomial time and
+space for local matching, transformations, and dispatch, while all search for
+the certificate is performed offline.
+
+\Needspace{10\baselineskip}
+\begin{theorem}[Global consequence]
+\label{thm:conditional-global}
+Suppose the completed certificate at $q=12872/10000$ satisfies the premises
+of \cref{thm:local-soundness}, with the imported results applied under their
+source hypotheses. Replacing Xiao's Step~5.4 by its recorded strategies
+solves \MaxSAT{} in $\OhStar(1.2872^m)$ time and polynomial space.
+\end{theorem}
+\begin{proof}
+Follow Xiao's ordered algorithm, using the recorded local strategy when the
+replaced case is reached. Coverage permits this choice, and
+\cref{thm:local-soundness} gives its correctness and branching inequality.
+The remaining cases satisfy the same target by \cref{tab:global-vectors}
+and the bound for Step~7. The fixed-certificate dispatch described above and
+\cref{lem:recurrence} bound the branching work. Polynomial work at a leaf
+may be replaced by the Step~7 subroutine: a leaf of remaining measure $m'$ has
+cost $\OhStar(1.2576^{m'})\le\OhStar(q^{m'})$, and the branching inequalities
+bound the sum of these leaf weights by $q^m$. A depth-first traversal has
+polynomial depth and stores polynomial information at each level. Together
+with the polynomial-space terminal subroutine, this proves the space bound.
+\end{proof}
+
+The imported lemmas are mathematical results used by this algorithm. Their
+certificate encoding determines the extent of machine checking: explicit
+transitions and recurrence arithmetic are checked, whereas imported
+applications are logged for inspection under their source hypotheses.
+
+\subsection{Reproducing the analysis}
+\label{sec:artifact}
+
+The generation session is run from the repository root after building the
+C++ executable. The following commands generate, assemble, and check the
+certificate; the final command can also be run on an existing certificate
+without repeating generation.
+\begin{lstlisting}
+make
+./maxsat_prover test < solve.txt
+python3 stitch_certificate.py pre_certificate.jsonl proof_tree.json \
+  --numerator 12872 --denominator 10000
+python3 verify_certificate.py proof_tree.json assumptions.json
+\end{lstlisting}
+Generation recreates \texttt{pre\_certificate.jsonl}. Verification writes the
+imported applications to \texttt{assumptions.json}. Its verdict is
+\texttt{ACCEPT} when this log is empty; otherwise it reports
+\begin{center}\texttt{ACCEPT RELATIVE TO ASSUMPTIONS}\end{center}
+
+% FINAL ARTIFACT: Freeze the generator, script, certificate, and checker together.
+% Add release URL, revision, hashes, dependencies, hardware, generation/checking
+% times and peak memory, certificate sizes, tree counts, and assumption counts.
+% The existing legacy certificate and a fresh v2 run must not be conflated.
+% FINAL PROOF AUDIT: Document the source hypotheses at imported applications,
+% including reduction alternatives and the preserved singleton in double_lemma3.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We developed a pipeline for turning a partially specified \MaxSAT{}
+neighborhood into a checked local branching analysis. Structural refinements
+cover the possible neighborhoods, and strategy search combines dominance,
+grouping, reductions, and recursive analysis of residual formulas. The
+certificate makes these stages explicit while reducing their verification to
+coverage, local optimum identities, and exact recurrence arithmetic.
+
+The $(3,2)$-literal case demonstrates how this pipeline can meet the target
+$1.2872$ and support a refinement of Xiao's analysis. The local soundness
+theorem and the global consequence identify the mathematical dependencies
+needed to use the generated tree. The same separation allows the search to
+be extended while keeping a common, inspectable verification interface.
+
+\begin{thebibliography}{99}
+
+\bibitem{Xiao2022}
+Mingyu Xiao.
+\newblock An exact MaxSAT algorithm: Further observations and further
+improvements.
+\newblock In \emph{Proceedings of the Thirty-First International Joint
+Conference on Artificial Intelligence}, pages 1887--1893, 2022.
+
+\bibitem{FedinKulikov2004}
+Sergey S. Fedin and Alexander S. Kulikov.
+\newblock Automated proofs of upper bounds on the running time of splitting algorithms.
+\newblock In \emph{IWPEC}, volume 3162 of LNCS, pages 248--259, 2004.
+\newblock \href{https://doi.org/10.1007/978-3-540-28639-4_22}{doi:10.1007/978-3-540-28639-4\_22}.
+
+\bibitem{Kulikov2005}
+Alexander S. Kulikov.
+\newblock Automated generation of simplification rules for SAT and MAXSAT.
+\newblock In \emph{SAT}, volume 3569 of LNCS, pages 430--436, 2005.
+\newblock \href{https://doi.org/10.1007/11499107_35}{doi:10.1007/11499107\_35}.
+
+\bibitem{Skjernaa2004}
+Bjarke Skjernaa.
+\newblock \emph{Exact Algorithms for Variants of Satisfiability and Colouring Problems}.
+\newblock PhD thesis, University of Aarhus, BRICS DS-04-5, 2004. Chapter~8.
+\newblock \url{https://www.brics.dk/DS/04/5/BRICS-DS-04-5.pdf}.
+
+\bibitem{CervenySuchy2023}
+Radovan \v{C}erven\'y and Ond\v{r}ej Such\'y.
+\newblock Generating faster algorithms for $d$-Path Vertex Cover.
+\newblock In \emph{WG}, pages 157--171, 2023.
+\newblock \href{https://doi.org/10.1007/978-3-031-43380-1_12}{doi:10.1007/978-3-031-43380-1\_12}.
+
+\bibitem{GaoEtAl2024}
+Xuan-Zhao Gao, Yi-Jia Wang, Pan Zhang, and Jin-Guo Liu.
+\newblock Automated discovery of branching rules with optimal complexity for
+  the Maximum Independent Set problem.
+\newblock arXiv:2412.07685, 2024.
+\newblock \url{https://arxiv.org/abs/2412.07685}.
+
+\bibitem{BansalRaman1999}
+Nikhil Bansal and Venkatesh Raman.
+\newblock Upper bounds for MaxSat: Further improved.
+\newblock In \emph{ISAAC}, pages 247--258, 1999.
+
+\bibitem{ChenKanj2004}
+Jianer Chen and Iyad A. Kanj.
+\newblock Improved exact algorithms for MAX-SAT.
+\newblock \emph{Discrete Applied Mathematics}, 142(1--3):17--27, 2004.
+
+\bibitem{XuEtAl2019}
+Chao Xu, Wenjun Li, Yongjie Yang, Jianer Chen, and Jianxin Wang.
+\newblock Resolution and domination: An improved exact MaxSAT algorithm.
+\newblock In \emph{Proceedings of the Twenty-Eighth International Joint
+Conference on Artificial Intelligence}, pages 1191--1197, 2019.
+
+\bibitem{ChenXuWang2017}
+Jianer Chen, Chao Xu, and Jianxin Wang.
+\newblock Dealing with 4-variables by resolution: An improved MaxSAT algorithm.
+\newblock \emph{Theoretical Computer Science}, 670:33--44, 2017.
+
+\bibitem{BliznetsGolovnev2012}
+Ivan Bliznets and Alexander Golovnev.
+\newblock A new algorithm for parameterized MAX-SAT.
+\newblock In \emph{IPEC}, pages 37--48, 2012.
+
+\bibitem{FominKratsch2010}
+Fedor V. Fomin and Dieter Kratsch.
+\newblock \emph{Exact Exponential Algorithms}.
+\newblock Springer, 2010.
+
+\bibitem{IhalainenEtAl2024}
+Hannes Ihalainen, Andy Oertel, Yong Kiam Tan, Jeremias Berg,
+Matti J\"arvisalo, Magnus O. Myreen, and Jakob Nordstr\"om.
+\newblock Certified MaxSAT preprocessing.
+\newblock In \emph{IJCAR}, volume 14739 of LNCS, pages 396--418, 2024.
+\newblock \href{https://doi.org/10.1007/978-3-031-63498-7_24}{doi:10.1007/978-3-031-63498-7\_24}.
+
+\end{thebibliography}
+\end{document}
