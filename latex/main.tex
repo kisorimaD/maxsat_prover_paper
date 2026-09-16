@@ -76,8 +76,8 @@ Combining generated strategies with branching lemmas from Xiao, the local
 analysis reaches the target $q=1.2872$. We prove the soundness of the certificate rules
 and state the conditions under which this local result yields an
 $\OhStar(1.2872^m)$-time algorithm. The contribution is a compositional,
-independently checkable analysis pipeline, with the improved local target
-serving as its case study.
+machine-checkable analysis pipeline relative to a fixed library of imported
+branching lemmas, with the improved local target serving as its case study.
 \end{abstract}
 
 \section{Introduction}
@@ -735,6 +735,20 @@ complete certificate, every refinement leaf must have a strategy passing the
 local vector check. This is the computational result to which
 \cref{thm:local-soundness} applies.
 
+\paragraph{Bounded-width mode.}
+With \texttt{--max-clause-size $k$}, the generated certificate proves only
+the declared local template family.  The degree list stored at every variable
+exposure is an explicit premise of that family; enumerating placements proves
+coverage relative to this list, not completeness of the list for arbitrary
+$k$-MaxSAT.  Clause width does not bound variable degree, and the 30-bit mask
+limit is only an implementation limit of the local search.  A global
+$k$-MaxSAT bound would additionally require an ordered treatment of every
+omitted degree and structural case, a width-preserving recursive algorithm,
+its terminal algorithm, and the corresponding recurrences.  Imported-lemma
+leaves are disabled by the generator and rejected by the checker in
+bounded-width mode, so each accepted bounded certificate contains only
+explicit checked transitions.
+
 \FloatBarrier
 \subsection{From a local strategy to a running-time bound}
 
@@ -836,19 +850,57 @@ make
 ./maxsat_prover test < solve.txt
 python3 stitch_certificate.py pre_certificate.jsonl proof_tree.json \
   --numerator 12872 --denominator 10000
-python3 verify_certificate.py proof_tree.json assumptions.json
+python3 verify_certificate.py proof_tree.json imported_lemmas.json
 \end{lstlisting}
 Generation recreates \texttt{pre\_certificate.jsonl}. Verification writes the
-imported applications to \texttt{assumptions.json}. Its verdict is
+imported applications to \texttt{imported\_lemmas.json}. Its verdict is
 \texttt{ACCEPT} when this log is empty; otherwise it reports
-\begin{center}\texttt{ACCEPT RELATIVE TO ASSUMPTIONS}\end{center}
+\begin{center}\texttt{ACCEPT RELATIVE TO IMPORTED LEMMAS}.\end{center}
 
-% FINAL ARTIFACT: Freeze the generator, script, certificate, and checker together.
-% Add release URL, revision, hashes, dependencies, hardware, generation/checking
-% times and peak memory, certificate sizes, tree counts, and assumption counts.
-% The existing legacy certificate and a fresh v2 run must not be conflated.
-% FINAL PROOF AUDIT: Document the source hypotheses at imported applications,
-% including reduction alternatives and the preserved singleton in double_lemma3.
+The artifact accompanying this version was generated at target
+$12872/10000$ and assembled as a version-2 certificate.  Its structure and
+the measured costs of assembly and checking are summarized in
+\cref{tab:artifact-summary}.  Times are wall-clock times from one run on an
+AMD Ryzen~7 5800U machine with 16 hardware threads and 15~GiB of memory,
+using Python~3.10.6, NumPy~2.2.6, and GCC~15.2.1.  Generation was performed
+in 38.011 seconds of wall-clock time (37.53 seconds user time and 0.09 seconds
+system time, at 98\% CPU utilization).  The assembly and verification
+measurements are reproducible from the saved JSON Lines log.
+
+\begin{table}[!htbp]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+Artifact property & Value \\
+\midrule
+Generation log & 5,448 records; 9,381,911 bytes \\
+Certificate & \texttt{maxsat-local-proof-v2}; 12,587,834 bytes \\
+Tree & 37,054 nodes; maximum depth 8 \\
+Refinement & 60 nodes: 40 tail splits and 20 variable exposures \\
+Strategies & 7,128 roots \\
+Decompositions & 12,765 nodes: 8,402 semantic and 4,363 assignment \\
+Leaves & 15,612 calls and 1,489 imported-lemma applications \\
+Largest local formula & 13 clauses \\
+Generation & 38.011 seconds wall-clock time; 37.53 user, 0.09 system \\
+Assembly & 8.75 seconds; 129.2 MiB peak resident memory \\
+Verification & 30.72 seconds; 185.4 MiB peak resident memory \\
+\bottomrule
+\end{tabularx}
+\caption{Statistics for the generated certificate.  The verifier reports
+\texttt{ACCEPT RELATIVE TO IMPORTED LEMMAS}.}
+\label{tab:artifact-summary}
+\end{table}
+
+The imported applications consist of 1,330 uses of \texttt{lemma3}, 119 of
+\texttt{lemma2}, 26 of \texttt{lemma4}, nine of
+\texttt{double\_lemma3}, and five of \texttt{step5.1}.  For exact artifact
+identification, the SHA-256 digests are
+\begin{lstlisting}
+pre_certificate.jsonl  59656a240d59b0613f84b5d864a2e4bc...
+proof_tree.json         01d18e63e7aa0a22a77670d8ea414bb8...
+\end{lstlisting}
+The full digests are recorded in \texttt{artifact\_manifest.txt}; the
+imported-lemma applications are listed in \texttt{imported\_lemmas.json}.
 
 \section{Conclusion}
 \label{sec:conclusion}
