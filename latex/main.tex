@@ -38,7 +38,6 @@
 \newcommand{\MaxSAT}{\textnormal{\textsc{MaxSAT}}}
 \newcommand{\OhStar}{O^*}
 \newcommand{\OPT}{\operatorname{OPT}}
-\newcommand{\qtarget}{\frac{12872}{10000}}
 \newcommand{\tail}[1]{?_{#1}}
 \newcommand{\ntail}[1]{?^{+}_{#1}}
 
@@ -191,10 +190,38 @@ $\OPT(F)\ge k$.
 
 A literal $x$ has degree $(i,j)$ if it occurs in $i$ clauses and its complement
 $\bar x$ in $j$ clauses. The complementary literal has degree $(j,i)$.
-Following Xiao, an $(i,1)$-literal is a \emph{singleton} when its unique
+An $(i,1)$-literal is a \emph{singleton} when its unique
 negative occurrence is the unit clause $(\bar x)$.
 
-\subsection{Scores and measure decreases}
+\subsection{Templates, scores, and measure decreases}
+
+A \emph{template} $P$ is a multiset of displayed clauses. It names selected
+variables explicitly and uses a \emph{tail} $?$ for the as-yet-undisplayed
+part of a clause. A $?^+$ tail contains at least one literal, whereas a $?$ tail
+may be empty. These marks describe clause syntax, not truth values; even a
+nonempty tail may evaluate to false. Subscripts distinguish tails, and repeated
+identifiers denote the same disjunction. All occurrences of a selected
+variable are displayed. Clauses written consecutively form a multiset, so
+repeated clauses count separately.
+
+A complete formula \emph{matches} $P$ when it can be written as
+$F=P[T]\uplus E$. Here $T$ replaces each tail by a disjunction of literals
+on unselected variables, and $E$ contains the remaining clauses. The symbol
+$\uplus$ denotes multiset union: multiplicities add even when clauses in the
+two parts are equal. No selected variable occurs in $T$ or $E$. Matching also
+respects any degree and singleton restrictions stated for the template.
+For a Boolean vector $\tau$ indexed by the tails, define the \emph{local
+score}
+\begin{equation}
+ B_P(\tau)=\max_{\alpha}\operatorname{sat}(P,\alpha,\tau),
+ \label{eq:local-score}
+\end{equation}
+where $\alpha$ assigns the selected variables and each tail is treated as a
+Boolean input. A clause made true by a tail counts as one satisfied clause.
+Different tails can share hidden variables in a complete instance. Checking
+all Boolean vectors $\tau$ includes every realizable combination, and may
+therefore reject a valid transformation, but cannot accept an invalid one for
+this reason.
 
 A correct branching step produces formulas $F_i$ and nonnegative integer
 \emph{offsets} $s_i$ such that
@@ -204,8 +231,9 @@ A correct branching step produces formulas $F_i$ and nonnegative integer
 Its \emph{measure decreases} are $d_i=|F|-|F_i|$. These need not equal the
 offsets: an empty false clause contributes to $d_i$ but not to $s_i$.
 For example, assigning $x=1$ in $(x)(\bar x)$ gives $s=1$ and $d=2$.
-Juxtaposition of clauses denotes their conjunction, with each occurrence
-counted separately.
+The generator represents such steps locally by transforming templates;
+\cref{lem:contextual-replacement} connects a checked local identity to the
+corresponding full formulas $F_i$.
 
 For a rational target $q>1$, a vector of positive integer decreases is
 \emph{$q$-admissible} when
@@ -213,7 +241,7 @@ For a rational target $q>1$, a vector of positive integer decreases is
   \sum_{i=1}^{r}q^{-d_i}\le 1.
   \label{eq:target}
 \end{equation}
-We use $q=12872/10000=1.2872$ and check this inequality exactly. The notation
+We use $q=1.2872$ and check this inequality exactly. The notation
 $\OhStar$ suppresses factors polynomial in the input length.
 
 \begin{lemma}[Branching recurrence]
@@ -250,47 +278,39 @@ The generator begins with the five-clause pattern in
 \cref{eq:neighborhood}, allowing each displayed tail to be empty. It can
 therefore encounter cases covered by neighboring steps as well as the intended
 bottleneck. The admissible degrees of newly exposed literals are part of the
-analysis configuration. The exact root pattern and the degree list used by
-\texttt{solve.txt} are given in \cref{sec:configuration}; their connection to
-Xiao's ordered algorithm is separated from the local checking argument in
-\cref{sec:global}.
+analysis configuration. The exact root pattern and degree list are given in
+\cref{sec:configuration}; their connection to Xiao's ordered algorithm is
+separated from the local checking argument in \cref{sec:global}.
 
 \Needspace{8\baselineskip}
 \section{Pipeline overview and a worked example}
 \label{sec:overview}
-
-A \emph{template} displays selected variables and uses $?$ for the remaining
-part of a clause. The symbol $?^+$ means that this part contains at least one
-literal. These marks describe syntax: $?^+$ can still be false under an
-assignment. Subscripts identify different tails when their identities matter.
-All occurrences of a selected variable are displayed, including occurrences
-outside the original five clauses.
 
 The refinement tree first asks structural questions. Is a chosen tail empty?
 If not, which degree can a literal in it have, and where can its other
 occurrences lie? Each answer gives a child template. The strategy search then
 asks an optimization question: which assignments or groups of assignments
 cover an optimal solution with a sufficiently good branching vector?
-\Cref{fig:pipeline} summarizes the two stages.
+\Cref{fig:pipeline} shows how the script interleaves them.
 
 \begin{figure}[!htbp]
 \centering
-\begin{tikzpicture}[>=Stealth,node distance=5mm,
- box/.style={draw,rounded corners=2pt,align=center,font=\small,
-             minimum height=12mm,text width=30mm}]
- \node[box] (root) {Root template\\and script};
- \node[box,right=of root] (refine) {Structural\\refinements};
- \node[box,right=of refine] (search) {Local strategy\\search};
- \node[box,right=of search] (check) {Certificate\\checker};
- \draw[->] (root)--(refine);
- \draw[->] (refine)--(search);
- \draw[->] (search)--(check);
- \draw[->] (search.south) -- ++(0,-0.5) -|
-   node[pos=0.25,below,font=\scriptsize]{unresolved cases: expose more structure}
-   (refine.south);
-\end{tikzpicture}
-\caption{The script selects refinements and search budgets. The generator
-constructs local strategies; the checker validates the resulting certificate.}
+\begin{minipage}{0.86\linewidth}
+\begin{lstlisting}
+frontier <- {root template}
+for each command in the analysis script:
+    if the command selects a refinement:
+        replace selected unresolved templates by their children
+    if the command starts a strategy search:
+        for each selected unresolved template:
+            if a strategy is found, record it and remove the template
+require frontier empty
+assemble the certificate; check coverage, identities, and vectors
+\end{lstlisting}
+\end{minipage}
+\caption{The generation and checking pipeline. Refinements cover structural
+cases; a strategy search resolves cases when it finds a suitable branch or
+reduction. The script chooses the refinements and search budgets.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -321,12 +341,17 @@ The unit clause $(\bar y)$ contributes offset~1, and all six clauses of $H$
 remain in the recursive formula, including the tail-only clause
 $(\tail{6})$. The second alternative satisfies six clauses and falsifies
 $(\bar y)$, leaving no local clause. It has offset~6 and decrease~7.
-Consequently, for every choice of tail values,
+Consequently, for every Boolean tail vector $\tau$,
 \begin{equation}
- \OPT(P)=\max\{1+\OPT(H),\,6\}.
+ B_P(\tau)=\max\{1+B_H(\tau),\,6\}.
  \label{eq:example-identity}
 \end{equation}
-Here and in this example only, the fixed tail values are implicit in $\OPT$.
+In a complete instance $F=P[T]\uplus E$, the same identity gives
+\[
+ \OPT(F)=\max\{1+\OPT(H[T]\uplus E),\,6+\OPT(E)\}.
+\]
+Thus the external clauses remain in both recursive alternatives, including
+the alternative with no remaining local clause.
 The vector is $(1,7)$, and $q^{-1}+q^{-7}<0.948<1$ at $q=1.2872$.
 \end{example}
 
@@ -362,31 +387,18 @@ recursive formula and $P$ for its displayed template.
 
 \subsection{Unknown tails and the surrounding formula}
 
-A concrete instance matches $P$ if it can be written as $F=P[T]\uplus E$.
-Here $P[T]$ replaces each tail by a disjunction of literals on unselected
-variables, and $E$ is the multiset of remaining clauses. No selected variable
-occurs in a tail or in $E$. Repeated tail identifiers denote the same
-disjunction. A $?^+$ tail must be nonempty; a $?$ tail may be empty. Matching
-also respects any degree and singleton restrictions used by the analysis.
+For a strategy transformation, not every tail identifier of the parent need
+occur in a child; every identifier that does occur must come from the parent.
+The checked score identity justifies any disappearance of local clauses or
+tails. Structural refinement has a different role. When a variable is exposed
+from a tail, the child's tail describes the remainder after that exposure, and
+the displayed fragment may acquire further clauses from $E$. Matching is
+always interpreted on the same complete instance, even though its displayed
+fragment changes.
 
-Within a strategy, tail identities are preserved across transformations:
-a child may omit a tail but cannot introduce an unrelated one. Structural
-refinement has a different role. When a variable is exposed from a tail,
-the child's tail describes the remainder after that exposure, and the displayed
-fragment may acquire further clauses from $E$. Matching is always interpreted
-on the same complete instance, even though its displayed fragment changes.
-
-For a Boolean vector $\tau$ indexed by the tails, define the local score
-\begin{equation}
- B_P(\tau)=\max_{\alpha}\operatorname{sat}(P,\alpha,\tau),
- \label{eq:local-score}
-\end{equation}
-where $\alpha$ assigns the selected variables. Tails are evaluated as Boolean
-inputs; a clause made true by a tail still counts as one satisfied clause.
-Different tails may share hidden variables in a concrete instance. Checking
-all Boolean vectors $\tau$ includes every realizable combination and may
-therefore reject some otherwise valid transformations, but cannot accept an
-invalid one for this reason.
+The local score $B_P(\tau)$ from \cref{eq:local-score} lets the checker compare
+such transformations without constructing a complete formula for each choice
+of external clauses.
 
 \subsection{Structural refinements}
 \label{sec:refinements}
@@ -416,8 +428,14 @@ Replace a chosen $?$ by the two cases ``empty'' and $?^+$. These cover every
 concrete tail. This is recorded as \texttt{tail\_empty\_or\_nonempty}.
 
 \paragraph{Variable exposure.}
-Choose a literal from a nonempty tail and name it $y$. For each allowed
-oriented degree $(i,j)$, enumerate all placements of $y$ and $\bar y$ in
+An analysis specifies a finite set of \emph{allowed oriented degrees}
+$(i,j)$ for the literal selected from a clause tail. The orientation counts
+occurrences of that literal first and its complement second. In our case this
+set consists of five classes, listed in \cref{sec:configuration}. Its
+completeness follows from the structural assumptions inherited from Xiao's
+ordered algorithm, not from a bound on clause width.
+Choose a literal from a nonempty tail and name it $y$. For each degree in
+this set, enumerate all placements of $y$ and $\bar y$ in
 existing clause tails, and add clauses for the remaining occurrences.
 The selected clause must contain $y$; singleton restrictions fix the unique
 negative occurrence to a unit clause. The remaining tail in each affected
@@ -497,8 +515,8 @@ best shifted optimum of a child in the same surrounding formula.
 
 \paragraph{Recursive call and imported lemma.}
 A \texttt{call} ends the local analysis and invokes the global algorithm on
-the remaining complete formula. It adds zero to the decrease already
-accumulated on its path. An imported lemma application, encoded as
+the remaining complete formula. The decrease accumulated along the path is
+the decrease of this leaf. An imported lemma application, encoded as
 \texttt{assumption}, supplies a named branching vector instead. The checker
 records its name, formula, vector, and tree path; its mathematical
 justification comes from the cited branching result and its applicability to
@@ -680,53 +698,8 @@ session are
 Degrees are oriented toward the literal selected in the clause. The session
 first exposes $y$ in a clause containing $\bar x$. It then exposes $z$ in a
 clause containing $\bar x$ but not $y$, interleaving these refinements with
-strategy searches. The commands are reproduced in \cref{fig:session}; blank
-lines after \texttt{addpos} are part of its clause-selection input.
-
-\begin{figure}[!htbp]
-\centering
-\begin{minipage}{0.44\linewidth}
-\begin{lstlisting}
-set 1.2872
-
-add x 3 2 a
-addpos y
--x
-
-branch
-addpos z
--x
-y
-xiao_branch 1
-xiao_branch 2
-branch
-empty_divide -1
-branch
-
-print 0
-exit
-\end{lstlisting}
-\end{minipage}\hfill
-\begin{minipage}{0.51\linewidth}\small\raggedright
-\texttt{add} declares the root; \texttt{a} allows arbitrary tails.
-
-\medskip
-\texttt{addpos} reads a name, required clause literals, and excluded clause
-literals. It distinguishes empty tails and enumerates variable exposures.
-
-\medskip
-\texttt{branch} runs enumeration and grouping.
-\texttt{xiao\_branch 1} and \texttt{xiao\_branch 2} request recursive variable
-searches of depths one and two.
-
-\medskip
-\texttt{empty\_divide -1} refines eligible tails in the unresolved frontier.
-The last \texttt{branch} searches the resulting cases.
-\end{minipage}
-\caption{The analysis session in \texttt{solve.txt}. The script controls the
-refinement schedule; local strategies are selected by the generator.}
-\label{fig:session}
-\end{figure}
+strategy searches. The complete script and its command semantics are in
+\cref{app:script}.
 
 The completed local analysis reaches $q=1.2872$ using the imported results
 in \cref{tab:dependencies}. \Cref{ex:group} gives one of its
@@ -769,9 +742,12 @@ throughout that refinement tree.
 
 \paragraph{The other recurrences.}
 \Cref{tab:global-vectors} checks the distinct vectors outside Step~5.4 in
-Xiao's global case table. Every check uses rational arithmetic; the displayed
-numbers are upper bounds rounded upward to six decimal places. In particular,
-both Steps~5.2 and~6.3 use $(11,3,3)$ and satisfy the target. The terminal
+Xiao's global case table. For a vector $(d_1,\ldots,d_r)$, the last column
+evaluates $\sum_i q^{-d_i}$ at $q=1.2872$; a value at most one establishes
+\cref{eq:target}. For example, $(11,3,3)$ gives
+$q^{-11}+2q^{-3}\approx 0.99997522<1$. Every check uses rational arithmetic;
+the displayed numbers are upper bounds rounded upward to six decimal places.
+Thus Steps~5.2 and~6.3 both satisfy the target. The terminal
 Step~7 takes $\OhStar(1.2576^m)$ time by Xiao's Lemma~5, which is within the
 same bound.
 
@@ -791,7 +767,7 @@ Xiao's steps & Branching vector & Upper bound on $\sum_i q^{-d_i}$ \\
 6.4 & $(18,18,11,11,11,11,4,4)$ & $0.998639$ \\
 \bottomrule
 \end{tabular}
-\caption{The unchanged cases at $q=12872/10000$. Vectors are taken from
+\caption{The unchanged cases at $q=1.2872$. Vectors are taken from
 Xiao~\cite[Table~3]{Xiao2022}; the rational checks isolate Step~5.4 as the
 case to replace. }
 \label{tab:global-vectors}
@@ -814,7 +790,7 @@ the certificate is performed offline.
 \Needspace{10\baselineskip}
 \begin{theorem}[Global consequence]
 \label{thm:conditional-global}
-Suppose the completed certificate at $q=12872/10000$ satisfies the premises
+Suppose the completed certificate at $q=1.2872$ satisfies the premises
 of \cref{thm:local-soundness}, with the imported results applied under their
 source hypotheses. Replacing Xiao's Step~5.4 by its recorded strategies
 solves \MaxSAT{} in $\OhStar(1.2872^m)$ time and polynomial space.
@@ -858,7 +834,7 @@ imported applications to \texttt{imported\_lemmas.json}. Its verdict is
 \begin{center}\texttt{ACCEPT RELATIVE TO IMPORTED LEMMAS}.\end{center}
 
 The artifact accompanying this version was generated at target
-$12872/10000$ and assembled as a version-2 certificate.  Its structure and
+$1.2872$ and assembled as a version-2 certificate. Its structure and
 the measured costs of assembly and checking are summarized in
 \cref{tab:artifact-summary}.  Times are wall-clock times from one run on an
 AMD Ryzen~7 5800U machine with 16 hardware threads and 15~GiB of memory,
@@ -917,6 +893,42 @@ $1.2872$ and support a refinement of Xiao's analysis. The local soundness
 theorem and the global consequence identify the mathematical dependencies
 needed to use the generated tree. The same separation allows the search to
 be extended while keeping a common, inspectable verification interface.
+
+\appendix
+\section{The analysis script}
+\label{app:script}
+
+The complete generation session in \texttt{solve.txt} is:
+\begin{lstlisting}
+set 1.2872
+
+add x 3 2 a
+addpos y
+-x
+
+branch
+addpos z
+-x
+y
+xiao_branch 1
+xiao_branch 2
+branch
+empty_divide -1
+branch
+
+print 0
+exit
+\end{lstlisting}
+The \texttt{add} command declares the root, with \texttt{a} allowing arbitrary
+tails. Each \texttt{addpos} reads a name, required clause literals, and
+excluded clause literals; blank lines delimit these inputs. It distinguishes
+empty tails and enumerates variable exposures. The \texttt{branch} command
+runs assignment enumeration and grouping. The two \texttt{xiao\_branch}
+commands request recursive variable searches of depths one and two.
+\texttt{empty\_divide -1} refines eligible tails in the unresolved frontier,
+and the last \texttt{branch} searches the resulting cases. The generator
+selects local strategies; the script controls the refinement schedule and
+search budgets.
 
 \begin{thebibliography}{99}
 
