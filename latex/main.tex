@@ -69,8 +69,8 @@ running-time bound. It combines local assignment choices with further
 reductions and branching on the resulting formulas.
 A separate checker validates case coverage, local optimum identities, and
 branching inequalities. We apply the framework to the $(3,2)$-literal
-bottleneck of the algorithm of~\cite{Xiao2022}. The completed analysis meets
-$q=1.2872$ using branching lemmas from that algorithm, supporting a replacement
+bottleneck of the algorithm of~\cite{Xiao2022}. The completed analysis reaches
+the target branching base $1.2872$ using branching lemmas from that algorithm, supporting a replacement
 of its limiting $(6,6,5,5)$ case. The method combines established ideas in
 automated branching into a search for compositional local strategies, with
 the case study checked relative to explicitly recorded mathematical
@@ -111,7 +111,9 @@ within those choices. A separate checker validates the resulting case analysis
 without repeating the optimization search.
 
 Our main application is Step~5.4 of the exact \MaxSAT{} algorithm
-of~\cite{Xiao2022}. Its vector $(6,6,5,5)$ limits that algorithm to
+of~\cite{Xiao2022}, which we call the \emph{baseline algorithm}.
+A branching vector records the guaranteed clause decreases in the recursive
+alternatives. The baseline vector $(6,6,5,5)$ limits that algorithm to
 $\OhStar(1.2886^m)$ time, where $m$ is the number of clauses and $\OhStar$
 suppresses polynomial factors. Our generated analysis reaches the target
 $q=1.2872$ using branching lemmas from the same source. The remaining cases
@@ -179,6 +181,7 @@ Throughout, $F\uplus G$ denotes multiset union: clause multiplicities add.
 
 A literal $x$ has degree $(i,j)$ if it occurs in $i$ clauses and its complement
 $\bar x$ in $j$ clauses. The complementary literal has degree $(j,i)$.
+The degree of the underlying variable is $i+j$.
 An $(i,1)$-literal is a \emph{singleton} when its unique
 negative occurrence is the unit clause $(\bar x)$.
 
@@ -193,6 +196,9 @@ nonempty tail may evaluate to false. Subscripts distinguish tails, and repeated
 identifiers denote the same disjunction. All occurrences of a selected
 variable are displayed. Clauses written consecutively form a multiset, so
 repeated clauses count separately.
+We call these selected variables the \emph{local variables} of the template.
+Child templates may retain them or introduce fresh local variables; in either
+case their occurrences are confined to the displayed clauses.
 
 A complete formula \emph{matches} $P$ when it can be written as
 $F=P[T]\uplus E$. Here $T$ replaces each tail by a disjunction of literals
@@ -240,6 +246,10 @@ decreases is \emph{$q$-admissible} when
   W_q(v)\le 1.
   \label{eq:target}
 \end{equation}
+For a positive decrease vector with at least two entries, its
+\emph{branching factor} is the unique $\rho>1$ satisfying
+$\sum_i\rho^{-d_i}=1$. Thus $W_q(v)\le1$ means that its branching factor
+is at most $q$.
 For the case study we use $q=1.2872$; acceptance checks this inequality
 exactly. A local recursive call with no additional decrease has vector $(0)$
 and weight one. Such a call can end a continuation after a positive incoming
@@ -325,8 +335,9 @@ arbitrary Boolean constraints between the free variables.
 Substitution yields an ordinary residual CNF, together with an objective offset
 and an initial clause decrease. The residual search can apply reductions,
 branch on another variable, or stop with a call to the global algorithm.
-It searches both children of a pivot up to a requested depth and retains a
-deeper continuation when useful. This allows asymmetric strategies and makes
+For each candidate branching variable (pivot), it searches both assignment
+children up to a requested depth and retains a deeper continuation when useful.
+This allows asymmetric strategies and makes
 the group's eventual cost depend on the residual structure it preserves.
 Clause-decreasing reductions can end in a call; implemented zero-decrease
 reductions eliminate a local variable before continuing.
@@ -334,6 +345,8 @@ reductions eliminate a local variable before continuing.
 \subsection{Selection by continuation costs}
 \label{sec:fixed-target}
 
+For a strategy $S$, let $v(S)$ denote the vector of accumulated clause
+decreases at its recursive-call leaves, measured from the root of $S$.
 At a fixed target $q$, an incoming decrease $b$ multiplies a continuation's
 weight by $q^{-b}$, and recursive alternatives add their weights:
 \begin{equation}
@@ -372,47 +385,67 @@ rational arithmetic and requires positive accumulated decreases.
 
 \subsection{A worked local strategy}
 
-\begin{example}[A group with a residual continuation]
+\begin{example}[A continuation that meets the target]
 \label{ex:group}
-The certificate contains the following eight-clause template, with
+The following nine-clause template is extracted from the certificate, with
 variables and tails renamed:
 \begin{equation}
 \begin{split}
- P={}&(x\vee y\vee z\vee\tail{1})(x\vee z\vee\tail{2})
-       (x\vee\bar z\vee\tail{3})\\
-    & (\bar x\vee y\vee\tail{4})(\bar x\vee z\vee\tail{5})
-       (y\vee\bar z\vee\tail{6})(\bar y\vee\tail{7})
-       (\bar y\vee\tail{8}).
+ P={}&(x\vee\bar y\vee z\vee\tail{1})(x\vee\tail{2})
+       (x\vee\tail{3})\\
+    & (\bar x\vee y\vee\tail{4})(\bar x\vee\bar y\vee z\vee\tail{5})\\
+    & (y\vee\tail{6})(\bar y\vee\bar z\vee\tail{7})
+       (z\vee\tail{8})(\bar z\vee\tail{9}).
 \end{split}
 \label{eq:example-parent}
 \end{equation}
-All three variables have degree five. The two groups are $y=z=0$, with
-$x$ free, and $z=1$, with $x,y$ free. They cover all assignments except
-$y=1,z=0$. Those excluded assignments are dominated by $(x,y,z)=(1,1,1)$:
-this assignment satisfies the first six clauses and preserves the values of
-the last two clauses because $y$ remains true.
+All three local variables have degree five. The strategy uses three groups:
+$G_0$ fixes $y=0$ and leaves $x,z$ free; $G_1$ fixes $y=1,z=0$ and leaves
+$x$ free; $G_2$ fixes $x=y=z=1$. These groups cover seven of the eight
+assignments. The omitted assignment $(x,y,z)=(0,1,1)$ is dominated by
+$(1,1,1)$: changing $x$ to one satisfies the second and third clauses,
+while the two clauses containing $\bar x$ remain true through $y$ or $z$.
+This comparison holds for every valuation of the tails.
 
-The first group satisfies four clauses and leaves
-\[
- H_0=(x\vee\tail{1})(x\vee\tail{2})
-     (\bar x\vee\tail{4})(\bar x\vee\tail{5}).
-\]
-The second satisfies three clauses and leaves
-\[
- H_1=(x\vee\tail{3})(\bar x\vee y\vee\tail{4})
-     (y\vee\tail{6})(\bar y\vee\tail{7})(\bar y\vee\tail{8}).
-\]
-Thus, for every Boolean tail vector $\tau$,
+The substitutions satisfy three, four, and seven clauses, respectively.
+Their residual templates are
+\begin{align*}
+ H_0={}&(x\vee\tail{2})(x\vee\tail{3})(\bar x\vee\tail{4})
+         (\tail{6})(z\vee\tail{8})(\bar z\vee\tail{9}),\\
+ H_1={}&(x\vee\tail{1})(x\vee\tail{2})(x\vee\tail{3})
+         (\bar x\vee\tail{5})(\tail{8}),\\
+ H_2={}&(\tail{7})(\tail{9}).
+\end{align*}
+Tail-only clauses remain in the residuals: for instance, $(\tail{6})$ in
+$H_0$ is not known to be satisfied or empty. Counting all residual clauses
+gives the initial decreases $(9-6,9-5,9-2)=(3,4,7)$. For every Boolean tail
+vector $\tau$, coverage and dominance give the local optimum identity
 \begin{equation}
- B_P(\tau)=\max\{4+B_{H_0}(\tau),\,3+B_{H_1}(\tau)\}.
+ B_P(\tau)=\max\{3+B_{H_0}(\tau),\,4+B_{H_1}(\tau),\,7+B_{H_2}(\tau)\}
  \label{eq:example-identity}
 \end{equation}
-The residual analysis eliminates the $(1,1)$-variable $x$ in $H_1$ by
-resolution. Its two incident clauses become
-$(y\vee\tail{3}\vee\tail{4})$, with offset and decrease one. Writing the
-result as $R$, we have $B_{H_1}=1+B_R$. The accumulated leaf vector is
-therefore $(4,3+1)=(4,4)$, with $W_{1.2872}\approx0.729<1$.
-The external formula remains in both recursive calls.
+
+Stopping at all three residuals would fail the target test:
+$W_{1.2872}((3,4,7))\approx1.003940>1$.
+The residual $H_0$, however, contains the $(1,1)$-variable $z$. For any fixed
+tail values, choosing $z$ satisfies one of its two clauses and both whenever
+at least one of their tails is true. Thus replacing those clauses by
+$(\tail{8}\vee\tail{9})$ gives
+\[
+ R_0=(x\vee\tail{2})(x\vee\tail{3})(\bar x\vee\tail{4})
+     (\tail{6})(\tail{8}\vee\tail{9}),
+ \qquad B_{H_0}(\tau)=1+B_{R_0}(\tau).
+\]
+This resolution has offset and decrease one. Continuing on $H_0$ and
+stopping at $H_1,H_2$ therefore yields
+\[
+ v(S)=(3+1,4,7)=(4,4,7),\qquad
+ W_{1.2872}(v(S))\approx0.899323<1.
+\]
+The extra decrease makes this decomposition meet the target, illustrating
+why a group's cost includes its residual continuation. All transitions in
+this example are explicit and require no imported lemma. The external
+formula remains in each of the three recursive calls.
 \end{example}
 
 \begin{figure}[!htbp]
@@ -420,19 +453,20 @@ The external formula remains in both recursive calls.
 \begin{tikzpicture}[>=Stealth,
  every node/.style={align=center,font=\small},
  case/.style={draw,rounded corners=2pt,inner sep=6pt}]
- \node[case] (p) {$P$ from \cref{eq:example-parent}};
- \node[case,below left=12mm and 9mm of p] (h0) {$H_0$; call\\$s=4,\ d=4$};
- \node[case,below right=12mm and 9mm of p] (h1) {$H_1$\\$s=3,\ d=3$};
- \node[case,below=10mm of h1] (r) {$R$; call\\additional $s=1,\ d=1$};
- \draw[->] (p)--node[above left]{$y=z=0$}(h0);
- \draw[->] (p)--node[above right]{$z=1$}(h1);
- \draw[->] (h1)--node[right]{resolution on $x$}(r);
+ \node[case] (p) at (0,0) {$P$ from \cref{eq:example-parent}};
+ \node[case] (h0) at (-3.5,-1.7) {$G_0:\ y=0$\\$H_0$\\$s=3,\ d=3$};
+ \node[case] (h1) at (0,-1.7) {$G_1:\ y=1,z=0$\\$H_1$; call\\$s=4,\ d=4$};
+ \node[case] (h2) at (3.5,-1.7) {$G_2:\ x=y=z=1$\\$H_2$; call\\$s=7,\ d=7$};
+ \node[case,below=11mm of h0] (r) {$R_0$; call\\additional $s=1,\ d=1$};
+ \draw[->] (p)--(h0);
+ \draw[->] (p)--(h1);
+ \draw[->] (p)--(h2);
+ \draw[->] (h0)--node[right]{resolution on $z$}(r);
 \end{tikzpicture}
-\caption{A generated strategy with a continuation on one grouped residual.
-All displayed variables have degree five; completions in which the hidden
-literals in the two $\bar x$-clauses also have degree five satisfy the degree condition of
-Step~5.4. The example illustrates composition, not a necessity claim for
-this continuation: the initial vector $(4,3)$ already meets the target.}
+\caption{The generated decomposition initially has vector $(3,4,7)$.
+Resolution in its first residual improves the vector to $(4,4,7)$, meeting
+the target $1.2872$. Completions in which hidden literals in the two
+$\bar x$-clauses also have degree five satisfy the degree condition of Step~5.4.}
 \label{fig:example}
 \end{figure}
 
@@ -492,7 +526,7 @@ found an optimal strategy.
 \subsection{The target case and its surrounding algorithm}
 \label{sec:bottleneck}
 
-The algorithm of~\cite{Xiao2022}, called the \emph{baseline algorithm} below,
+The baseline algorithm of~\cite{Xiao2022}
 applies reductions and branching cases in a fixed order. Step~5 handles a
 $(3,2)$-literal $x$ with incident clauses
 \begin{equation}
