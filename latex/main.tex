@@ -492,12 +492,13 @@ dominance elimination, and grouped branches.
 
 Composition has two distinct operations. Recursive alternatives contribute
 the sum of their shifted weights as in \cref{eq:weight-composition}.
-Structural cases describe different possible inputs and contribute their
-maximum weight. The checker accumulates decreases along every strategy path,
-checks progress at the recursive calls, and checks every structural case.
-The checker also validates explicit structural conditions and resolvents for
-the resolution rules described in \cref{app:local-resolution}. The local
-soundness theorem in \cref{thm:local-soundness} gives the formal
+Structural refinements precede the strategies and describe different possible
+inputs. The checker validates every refinement child and checks each terminal
+strategy separately. Within a strategy, it accumulates decreases along each
+path and checks progress and the target inequality at its root. Reductions,
+including resolution, are represented by semantic decompositions and checked
+through \cref{eq:semantic-decomposition}. The local soundness theorem in
+\cref{thm:local-soundness} gives the formal
 guarantee relative to complete structural degree lists and applicable
 imported lemmas. The certificate rules and proof are in
 \cref{sec:certificate}.
@@ -506,7 +507,9 @@ The C++ generator logs refinements and chosen strategies. An assembler connects
 them into a certificate and rejects unresolved cases. A separate Python checker
 implements template normalization, refinement enumeration, assignment
 simplification, local score tables, and exact rational weight arithmetic
-independently of the search. Computing a score table for $a$ local variables,
+independently of the search. Its bottleneck profile additionally requires
+$q=1.2872$, the root in \cref{eq:root}, and the exposure classes in
+\cref{sec:configuration}. Computing a score table for $a$ local variables,
 $t$ tails, and representation length $\ell(P)$ takes
 $O(2^{a+t}\ell(P))$ time by enumeration. This work concerns the finite offline
 analysis. Once its certificate is fixed, local template sizes are constants
@@ -580,19 +583,20 @@ same instance, preserving these restrictions.
 
 The search uses the baseline Lemmas~2--4 and the repeated Lemma~3 argument
 from Step~5.5 as available continuation rules. Their source hypotheses,
-including reduction-or-branch alternatives, are retained. Step~5.1 is expanded
-into an explicitly checked local proof. \Cref{tab:dependencies} lists the
+including reduction-or-branch alternatives, are retained. Step~5.1 is handled
+by an explicit assignment decomposition with both residual formulas checked.
+\Cref{tab:dependencies} lists the
 correspondence between the source results and the certificate names;
 \cref{sec:strategies} describes their verification boundary.
 
 \subsection{Completed analysis}
 \label{sec:artifact}
 
-The generated analysis resolves all cases, and the assembled certificate
-passes the separate checker with verdict
-\texttt{ACCEPT RELATIVE TO IMPORTED LEMMAS}.
-\Cref{tab:artifact-summary} summarizes the certificate and the measured costs. These measurements describe
-offline construction and checking, not the running time of a \MaxSAT{} solver.
+The generated analysis resolves all cases. The assembled certificate passes
+the separate checker with verdict
+\texttt{ACCEPT BOTTLENECK RELATIVE TO IMPORTED LEMMAS}.
+\Cref{tab:artifact-summary} summarizes the certificate and the offline costs
+of constructing and checking it.
 
 \begin{table}[!htbp]
 \centering\small
@@ -600,14 +604,14 @@ offline construction and checking, not the running time of a \MaxSAT{} solver.
 \toprule
 Property & Value \\
 \midrule
-Structural refinements & 52 \\
-Strategy roots & 7,120 \\
-Certificate nodes & 41,361 \\
+Structural refinements & 58 \\
+Strategy roots & 7,126 \\
+Certificate nodes & 41,834 \\
 Maximum depth & 9 \\
-Imported applications & 2,802 \\
-Generation, wall-clock seconds & 13.63 \\
-Assembly, wall-clock seconds & 11.23 \\
-Verification, wall-clock seconds & 31.20 \\
+Imported applications & 2,637 \\
+Generation, wall-clock seconds & 9.20 \\
+Assembly, wall-clock seconds & 8.25 \\
+Verification, wall-clock seconds & 33.08 \\
 \bottomrule
 \end{tabular}
 \caption{The completed analysis at $q=1.2872$.
@@ -756,10 +760,10 @@ faithful enumeration of its incidences is checked computationally.
 \subsection{Local strategies}
 \label{sec:strategies}
 
-The basic certificate operations are refinement, decomposition, recursive
-call, and imported lemma application. Refinements may occur within a strategy
-as well as above its root. Proof-backed local lemmas and partially expanded
-imported lemmas extend these operations as described below.
+The certificate consists of a structural refinement tree whose terminal
+cases each carry a strategy. A strategy uses decompositions, recursive calls,
+and applications of four named imported rules. Refinements are checked in the
+outer tree; strategy nodes do not contain further structural refinements.
 Decompositions have two forms.
 
 \paragraph{Assignment decomposition.}
@@ -808,36 +812,6 @@ using \cref{eq:semantic-decomposition}. The expression on the right is the
 best shifted optimum of a child in the same surrounding formula.
 \end{proof}
 
-\paragraph{Checked resolution rules.}
-\label{app:local-resolution}
-The current certificate also contains 153 \texttt{local\_resolution} nodes.
-Their checker validates a sufficient structural condition and constructs the
-resolvents directly, rather than treating the operation as an opaque import.
-Four nodes use a $(2,2)$-pivot rule from~\cite{ChenXuWang2017}; the other
-149 use the $(2,1)$-pivot rule from~\cite{XuEtAl2019}. The implementation
-names these rules \texttt{RR10} and \texttt{RR11}, respectively; these are
-not their source numbers.
-
-For \texttt{RR10}, each of the four pivot clauses must have a displayed
-witness literal whose complement occurs exactly once and outside the pivot
-block. Resolution replaces the four clauses by their four resolvents, with
-zero offset and decrease. To see correctness, an assignment falsifying a
-block clause can set its witness true, gaining that clause and losing at
-most one clause outside the block. Repeating this produces an equally good
-assignment satisfying the block. The same exchange works for the resolvent
-block, since each resolvent contains a witness of an original clause.
-For assignments satisfying either block, the usual resolution equivalence
-preserves extendibility to the pivot, and both blocks contain four clauses.
-All witness occurrences are displayed, so the exchange also applies in any
-external context. This proves equality of the local optima.
-
-For \texttt{RR11}, the pivot occurs twice in one polarity and once in the
-other, and the union of the three clause remainders contains an explicit
-complementary pair. Those remainders cannot all be false. Directly maximizing
-over the pivot therefore gives one plus the score of the two resolvents.
-The offset and decrease are both one. Both rules can be followed by a checked
-continuation on the reconstructed residual formula.
-
 \paragraph{Recursive call and imported lemma.}
 A \texttt{call} ends the local analysis and invokes the global algorithm on
 the remaining complete formula. The decrease accumulated along the path is
@@ -851,13 +825,14 @@ in Step~5.5 of that algorithm. In particular, we use Lemma~3
 of~\cite{Xiao2022}, a refinement of Lemma~9 of~\cite{XuEtAl2019}.
 These numbers refer to the source results, not to the numbered statements
 of this paper. \Cref{tab:dependencies} gives the correspondence to the
-certificate names; Step~5.1 is supplied by a checked local proof.
+certificate names; Step~5.1 is checked as an ordinary assignment
+decomposition, as described below.
 
 \begin{table}[!htbp]
 \centering\small
 \begin{tabularx}{\linewidth}{@{}lX@{}}
 \toprule
-Certificate name & Mathematical dependency \\
+Rule or case & Mathematical dependency \\
 \midrule
 \texttt{lemma2} & Lemma~2 for an $(i,1)$ non-singleton,
 imported there from~\cite{XuEtAl2019}. \\
@@ -867,16 +842,15 @@ refining Lemma~9 of~\cite{XuEtAl2019}. \\
 \texttt{double\_lemma3} & The composition of Lemma~3
 used in its Step~5.5,
 with the second singleton preserved in the resolution child. \\
-\texttt{step5.1} & Step~5.1, the unit-clause case for a
-$(3,2)$-literal, supplied by a checked assignment proof. \\
+Step~5.1 & The unit-clause case for a $(3,2)$-literal,
+expanded into an explicit assignment decomposition. \\
 \bottomrule
 \end{tabularx}
-\caption{Branching dependencies from~\cite{Xiao2022} and their certificate
-names. Lemma and step numbers in this table belong to that source.
-Imported uses require the source
-hypotheses, including any reduction-or-branch alternative and the claimed
-decreases in the complete instance. Opaque imported applications are logged;
-proof-backed applications are expanded and checked.}
+\caption{Imported branching rules and the explicitly checked Step~5.1
+of~\cite{Xiao2022}. Lemma and step numbers belong to that source.
+Imported applications are logged and require the source hypotheses,
+including reduction-or-branch alternatives and the claimed decreases in the
+complete instance. Step~5.1 contributes no imported assumption.}
 \label{tab:dependencies}
 \end{table}
 
@@ -901,33 +875,17 @@ This is the composition used in Step~5.5 of the baseline algorithm. The reductio
 of the imported lemmas must still be handled as reductions when they apply;
 the calculation above describes their nested branching case.
 
-\paragraph{Proof-backed and partially expanded lemmas.}
-The current implementation expands Step~5.1 into a checked assignment proof.
-A \texttt{local\_context} node embeds its local template in the current
-formula: all incident clauses of the kept variables are retained, other
-literals are bound to tail expressions, and unrelated clauses stay in the
-surrounding formula. The checker validates this embedding, clause
-multiplicities, tail constraints, and freshness, then checks the attached
-proof. The embedding contributes zero offset and zero measure decrease.
-Its leaf vector is recomputed from the proof, and only the complete enclosing
-strategy must meet the target.
-
-A \texttt{lemma3\_split} node instead exposes the resolution child of
-the same source Lemma~3 and checks a continuation $T$ on that child.
-For incident clauses $(x\vee C_1)(x\vee C_2)(\bar x\vee D)$, this child
-replaces them by $(C_1\vee D)(C_2\vee D)$, with offset and decrease one.
-Writing $a=\max\{8,7+2|D|\}$ for the source's long-branch guarantee, the
-node is bounded at the fixed target by
-\begin{equation}
- \max\bigl\{q^{-1},\ q^{-a}+q^{-1}W_q(v(T))\bigr\}.
- \label{eq:partial-lemma-weight}
-\end{equation}
-The maximum is necessary because the source lemma permits either a reduction
-of at least one clause or the displayed branching. That unspecified reduction
-need not produce the resolution child, so it cannot inherit $T$.
-The checker validates the displayed resolution and its continuation;
-the long-branch guarantee and reduction-or-branch alternative remain imported
-premises. This operation is unavailable when imported assumptions are disabled.
+\paragraph{Explicit assignment proof for Step~5.1.}
+For a $(3,2)$-literal whose minority literal has a unit occurrence, the
+strategy assigns the underlying variable in both ways. Setting the dominant
+literal true satisfies its three incident clauses and removes the now-false
+minority unit clause, giving a decrease of at least four. The opposite
+assignment satisfies the two minority clauses, giving a decrease of at least
+two. The generator records an ordinary assignment decomposition, and the
+checker reconstructs both residual formulas, offsets, and actual decreases.
+Any tail-only clauses remain in the complete recursive formulas according to
+\cref{eq:transfer}. This realizes the $(4,2)$ guarantee without a separate
+lemma-embedding operation or imported assumption.
 
 \subsection{Composition and soundness}
 \label{sec:checker}
@@ -939,10 +897,9 @@ vector. The complete accumulated vector in every structural case must have
 positive entries and satisfy \cref{eq:target}; an intermediate reduction
 may have decrease zero.
 Refinement children are separate structural cases, so their vectors are
-not concatenated. At an outer refinement each case is checked separately.
-Within a strategy their contribution is bounded by the maximum of the case
-weights; an incoming decrease scales this maximum just as it scales a
-single continuation.
+not concatenated. Each terminal strategy in the refinement tree is checked
+separately. Consequently, the worst weight over those strategies bounds the
+whole family; it is not added to the weights of other structural cases.
 
 The identities in \cref{eq:weight-composition} show how weights compose.
 Thus recursive alternatives add their shifted weights, whereas structural
@@ -976,8 +933,8 @@ It does not assert that a bounded search discovers all possible strategies.
 \Needspace{17\baselineskip}
 \begin{theorem}[Local certificate soundness]
 \label{thm:local-soundness}
-Let a finite certificate pass the refinement, decomposition, resolution,
-and vector checks above at target $q$, with positive accumulated call decreases in
+Let a finite certificate pass the refinement, decomposition, and vector
+checks above at target $q$, with positive accumulated call decreases in
 every structural case. Suppose its exposure degree lists are complete
 under the stated structural restrictions, and each recorded imported lemma
 admits a correct recursive strategy with at least the recorded decreases for
@@ -991,17 +948,13 @@ exposure enumerates every permitted incidence pattern. Thus at least one
 refinement child applies to each matching instance. Assignment decomposition
 is exhaustive, with the clause accounting in \cref{eq:transfer}. Semantic
 decomposition preserves the optimum by \cref{lem:contextual-replacement}.
-The checked resolution rules preserve local optima by the arguments in
-\cref{app:local-resolution}. Calls end a local path, and imported
-applications use the stated hypothesis.
-Checked local-context embeddings preserve the surrounding formula;
-partially expanded imports use the checked continuation and the source
-alternatives in \cref{eq:partial-lemma-weight}.
-Edge decreases telescope along each path; larger actual decreases can only
-improve \cref{eq:target}. Taking a maximum at an internal refinement bounds
-every structural case by \cref{eq:weight-composition}.
-The check at each strategy root establishes the
-claimed recurrence.
+This includes every recorded reduction, which is represented by a one-child
+semantic decomposition. Calls end a local path, and imported applications
+use the stated hypothesis. Edge decreases telescope along each strategy path;
+larger actual decreases can only improve \cref{eq:target}. The check at each
+strategy root establishes the target inequality for that structural case.
+Since the refinement tree covers the root family and every terminal case
+has a checked strategy, the conclusion holds throughout the family.
 \end{proof}
 
 \section{Retained recurrences}
@@ -1096,11 +1049,6 @@ Chao Xu, Wenjun Li, Yongjie Yang, Jianer Chen, and Jianxin Wang.
 \newblock Resolution and domination: An improved exact MaxSAT algorithm.
 \newblock In \emph{Proceedings of the Twenty-Eighth International Joint
 Conference on Artificial Intelligence}, pages 1191--1197, 2019.
-
-\bibitem{ChenXuWang2017}
-Jianer Chen, Chao Xu, and Jianxin Wang.
-\newblock Dealing with 4-variables by resolution: An improved MaxSAT algorithm.
-\newblock \emph{Theoretical Computer Science}, 670:33--44, 2017.
 
 \bibitem{IhalainenEtAl2024}
 Hannes Ihalainen, Andy Oertel, Yong Kiam Tan, Jeremias Berg,
