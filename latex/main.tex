@@ -1,16 +1,19 @@
-\documentclass[11pt]{article}
+\documentclass[10pt,twoside]{article}
 
-\usepackage[T1]{fontenc}
+\usepackage[T2A,T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
-\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[letterpaper,textwidth=113mm,textheight=510bp,top=118bp,
+  hcentering,headsep=17bp,footskip=23bp]{geometry}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{adjustbox}
 \usepackage{microtype}
 \usepackage{xcolor}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{mathtools}
 \usepackage{booktabs,tabularx}
 \usepackage{enumitem}
-\usepackage{needspace}
 \usepackage{flafter}
 \usepackage[section]{placeins}
 \usepackage{tikz}
@@ -20,19 +23,16 @@
 \usepackage[nameinlink,noabbrev]{cleveref}
 
 \hypersetup{
-  colorlinks=true,
-  linkcolor=blue!45!black,
-  citecolor=green!40!black,
-  urlcolor=blue!55!black,
+  hidelinks,
   pdftitle={Compositional Local Branching Analysis for MaxSAT},
-  pdfauthor={Anonymous author(s)},
+%   pdfauthor={D. Saitov, T. Belova},
   pdfkeywords={MaxSAT, exact algorithms, automated branching analysis, certificates}
 }
 \emergencystretch=3em
 \widowpenalty=1000
 \clubpenalty=1000
 \lstset{basicstyle=\small\ttfamily,columns=fullflexible,
-  keepspaces=true,frame=single,framerule=0.3pt,
+  keepspaces=true,breaklines=true,
   aboveskip=0.7em,belowskip=0.7em}
 
 \newcommand{\MaxSAT}{\textnormal{\textsc{MaxSAT}}}
@@ -50,89 +50,124 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-% SUBMISSION: Retain anonymity or add affiliations as required by the venue.
-\title{Compositional Local Branching Analysis for \MaxSAT{}}
-\author{}
+% Centered preview based on published POMI articles and the 113 mm measure
+% in https://github.com/madrugado/template-zapiski/blob/main/zapiski.cls.
+\let\standardnormalsize\normalsize
+\renewcommand{\normalsize}{\standardnormalsize\fontsize{9.75pt}{11.7pt}\selectfont}
+\AtBeginDocument{\normalsize}
+\setlength{\parindent}{12bp}
+\raggedbottom
+\setlength{\headheight}{13pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\small\thepage}
+% \fancyhead[CE]{\footnotesize\scshape D. Saitov, T. Belova}
+\fancyhead[CO]{\footnotesize\scshape Compositional local branching analysis for MaxSAT}
+\renewcommand{\headrulewidth}{0pt}
+\titleformat{\section}[block]
+  {\centering\normalfont\scshape}{\S\thesection.}{0.4em}{}
+\titleformat{name=\section,numberless}[block]
+  {\centering\normalfont\scshape}{}{0pt}{}
+\titleformat{\subsection}[runin]
+  {\normalfont\bfseries}{\thesubsection.}{0.4em}{}[.]
+\titlespacing*{\section}{0pt}{1.5ex plus 0.5ex}{0.8ex}
+\titlespacing*{\subsection}{\parindent}{1.2ex plus 0.4ex}{0.5em}
+
+\makeatletter
+\renewcommand{\maketitle}{%
+  \thispagestyle{plain}%
+  \noindent\hfill\raisebox{0pt}[0pt][0pt]{%
+    \begin{tabular}[b]{@{}r@{}}\footnotesize
+      {\fontencoding{T2A}\selectfont Записки научных}\\[-1pt]
+      {\fontencoding{T2A}\selectfont семинаров ПОМИ}\\[-1pt]
+      Manuscript
+    \end{tabular}}%
+  \par\vspace{1.2em}%
+  {\raggedright
+    \ifx\@author\@empty\else
+      \noindent\hspace*{\parindent}\textbf{\@author}\par\smallskip
+    \fi
+    \noindent\hspace*{\parindent}\parbox[t]{0.88\linewidth}{%
+      \raggedright\bfseries\MakeUppercase{\@title}}\par}%
+  \medskip
+}
+\renewenvironment{abstract}
+  {\footnotesize\list{}{\setlength{\leftmargin}{3pc}\setlength{\rightmargin}{3pc}}%
+   \item\relax\textsc{Abstract.}\enspace}
+  {\endlist}
+\makeatother
+\title{Compositional Local Branching Analysis for MaxSAT}
+% \author{D.~Saitov, T.~Belova}
 \date{}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Local branching analyses often combine several assignments, reductions, and
-further branches before achieving the desired measure decrease. We develop
-an automated framework for constructing such analyses for unweighted
-\MaxSAT{}. Starting from a partially specified clause neighborhood, the
-framework distinguishes possible configurations and searches for sequences of
-transformations that preserve an optimal solution and meet a target
-running-time bound. It combines local assignment choices with further
-reductions and branching on the resulting formulas.
-A separate checker validates case coverage, local optimum identities, and
-branching inequalities. We apply the framework to the $(3,2)$-literal
-bottleneck of the algorithm of~\cite{Xiao2022}. The completed analysis reaches
-the target branching base $1.2872$ using branching lemmas from that algorithm, supporting a replacement
-of its limiting $(6,6,5,5)$ case. The method combines established ideas in
-automated branching into a search for compositional local strategies, with
-the case study checked relative to explicitly recorded mathematical
-dependencies.
+We present a tool that constructs and checks local branching analyses for
+unweighted maximum satisfiability (MaxSAT). Given a partially specified
+clause neighborhood, structural restrictions, and a target branching base,
+it searches for strategies covering the allowed completions. The search
+groups local assignments by substitutions and selects a weighted cover
+whose costs include reductions and further branches on the residual
+formulas. A separate checker verifies structural coverage, identities for
+local optima, and branching inequalities. For the $(3,2)$-literal
+bottleneck of Xiao's exact algorithm, the tool produces a certificate
+at base $1.2872$. Under the recorded structural and imported-lemma premises,
+replacing the limiting $(6,6,5,5)$ branch yields time $\OhStar(1.2872^m)$,
+where $m$ is the number of clauses and $\OhStar$ suppresses polynomial factors.
 \end{abstract}
+
+\begin{NoHyper}
+\renewcommand{\thefootnote}{}\footnotetext{\textit{Key words and phrases:}
+MaxSAT, exact algorithms, automated branching analysis, certificates.}
+\end{NoHyper}
 
 \section{Introduction}
 \label{sec:introduction}
 
-A local branching analysis describes how a small configuration in an instance
-can be replaced by simpler recursive alternatives. To establish a running-time
-bound, the alternatives must preserve an optimal solution and decrease the
-chosen measure sufficiently. A useful strategy may require several rounds of
-branching and reduction, with the choice of later operations depending on the
-residual instance. Constructing these strategies and covering all possible
-local configurations can require an extensive case analysis.
+A recurring task in the analysis of exact algorithms is to replace a
+local configuration by simpler recursive alternatives. In unweighted
+\MaxSAT{}, the alternatives must preserve the maximum number of satisfied
+clauses and decrease the number $m$ of clauses enough to meet a target
+running-time bound. A useful strategy may combine several assignments,
+reductions, and branches. Its later operations depend on the residual
+formula, and a single partially specified configuration may require
+different strategies for different completions.
 
-We study the automation of this task for unweighted \MaxSAT{}, using the
-number of clauses as the measure. The input is a partially specified clause
-neighborhood together with structural restrictions and a target branching
-base. The output is a family of local strategies covering that neighborhood.
-Unknown clause tails represent the undisplayed part of the instance, so a
-strategy must work for every completion allowed by the restrictions.
+We present a tool for constructing and checking such local analyses.
+The input specifies a clause neighborhood, structural restrictions,
+and a target branching base $q$. An analysis script schedules refinements
+and strategy searches. The generator searches for a strategy in each case,
+and an assembler combines the strategies into a certificate.
+Unknown clause tails represent the part of the instance that has yet to
+be exposed, so the certificate must cover every allowed completion.
 
-Our framework represents groups of local assignments by variable
-substitutions. A group can fix some variables and leave others free or
-identify them up to sign. Each substitution produces a residual CNF, on which
-the search can apply reductions and further branching. The cost of a group
-therefore includes its selected continuation. At a fixed target $q$, these
-costs are additive, allowing the generator to choose a minimum-weight cover
-of the assignments that remain after dominance elimination.
+We demonstrate the tool on Step~5.4 of Xiao's exact \MaxSAT{}
+algorithm~\cite{Xiao2022}, which we call the \emph{baseline algorithm}.
+The vector $(6,6,5,5)$, recording the guaranteed clause decreases, limits
+that algorithm to $\OhStar(1.2886^m)$ time, where $\OhStar$ suppresses
+polynomial factors. The generated certificate reaches $q=1.2872$ relative
+to branching lemmas from the same source. Under their applicability
+conditions, the generated strategies can replace Step~5.4 and yield the
+bound $\OhStar(1.2872^m)$ with the other cases and the terminal algorithm
+retained.
 
-Structural refinement and strategy search serve different roles. Refinement
-reveals which local configuration the instance has; a strategy describes how
-to solve an instance with that configuration. An analysis script chooses the
-refinements and search budgets, while the program searches for strategies
-within those choices. A separate checker validates the resulting case analysis
-without repeating the optimization search.
-
-Our main application is Step~5.4 of the exact \MaxSAT{} algorithm
-of~\cite{Xiao2022}, which we call the \emph{baseline algorithm}.
-A branching vector records the guaranteed clause decreases in the recursive
-alternatives. The baseline vector $(6,6,5,5)$ limits that algorithm to
-$\OhStar(1.2886^m)$ time, where $m$ is the number of clauses and $\OhStar$
-suppresses polynomial factors. Our generated analysis reaches the target
-$q=1.2872$ using branching lemmas from the same source. The remaining cases
-and the terminal algorithm are retained. This is a completed application of
-the local method, whose search interface is not specific to Step~5.4.
-
-\paragraph{Contributions.}
-We develop a compositional local strategy search combining substitution-based
-groups, recursive residual analysis, and selection by continuation costs.
-We give a common semantic check for the generated transformations and a
-certificate checker for their composition and structural coverage. Finally,
-we provide a complete analysis of the selected \MaxSAT{} family at
-$q=1.2872$, with its imported mathematical dependencies recorded explicitly.
+The search represents groups of local assignments by substitutions that
+fix variables, leave them free, or identify them up to sign. Each group
+produces a residual CNF on which the tool can search for further
+reductions and branches. The group cost includes its chosen continuation.
+At fixed $q$ these costs add, allowing the generator to select a
+minimum-weight cover of the undominated assignments from its candidates.
+A separate checker verifies coverage, optimum preservation, and the
+branching bound. The certificate soundness theorem establishes the
+guarantee under the stated structural and imported-lemma premises.
 
 \subsection{Related work and scope}
 \label{sec:related}
 
 Automated branching analysis predates this work. Fedin and
-Kulikov~\cite{FedinKulikov2004} generated upper-bound proofs from supplied
+Kulikov~\cite{FedinKulikov2004,KulikovFedinPOMI2004} generated upper-bound proofs from supplied
 simplification rules, including experiments for \MaxSAT{}.
 Kulikov~\cite{Kulikov2005} studied automatic discovery of simplification
 rules. Skjernaa~\cite[Chapter~8]{Skjernaa2004} used partially specified
@@ -147,30 +182,31 @@ al.~\cite{GaoEtAl2024} select branching rules for Maximum Independent Set
 through a weighted set-cover problem with costs evaluated at a fixed
 branching base. \v{C}erven\'y and Such\'y~\cite{CervenySuchy2023} generate
 branching algorithms for $d$-Path Vertex Cover and provide a separate proof
-verification procedure in their accompanying implementation.%\footnote{\url{https://github.com/generating-algorithms/generating-dpvc}}
-Our focus is
-the combination of substitution-generated residual CNFs, recursive searches
-on those residuals, and their continuation costs within a covering search.
+verification procedure in their accompanying implementation. Our focus is
+the combination of substitution-generated residual CNFs, local continuations
+on those residuals, and their costs within a covering search.
 The checker validates the resulting local transformations through optimum
 identities over unknown tail values. We do not claim priority for dominance,
 grouping, fixed-target weights, or separate verification individually.
 
-The framework constructs finite local analyses, rather than solving an
-arbitrary global analysis automatically. Its completeness depends on the
-chosen refinements and search budgets. Restrictions on a template can describe
-other local families, including bounded-width families, but a global bound
-for another variant requires its own coverage and recursive-algorithm
-argument. Proof logging for individual \MaxSAT{} instances, such as certified
+The implementation targets the local family in \cref{sec:configuration}.
+The certificate covers that family when the chosen refinements and available
+continuations resolve every case. A global bound for another variant
+requires its own coverage and recursive-algorithm argument. Proof logging for
+individual \MaxSAT{} instances, such as certified
 preprocessing~\cite{IhalainenEtAl2024}, has a different target from the
 family-wide local analyses considered here.
 
-\section{The local analysis problem}
+\section{Preliminaries and local analysis}
 \label{sec:preliminaries}
 
 We use standard unweighted \MaxSAT{} terminology as in~\cite{Xiao2022}.
-A formula $F$ is a multiset of clauses: equal clauses are retained with
-multiplicity. We assume the normalization described in
-\cref{app:normalization}, and write $m=|F|$ and
+Before applying the recursive algorithm, remove duplicate literals within
+each clause. Remove tautological clauses with an objective offset of one
+each, and empty clauses with offset zero. The initial measure $m$ counts
+clauses after this normalization. Equal nonempty clauses are retained as
+distinct multiset occurrences.
+For the resulting multiset $F$, write $m=|F|$ and
 \[
   \OPT(F)=\max_{\alpha}\operatorname{sat}(F,\alpha),
 \]
@@ -264,7 +300,7 @@ then gives an $\OhStar(q^m)$ bound when these strategies are embedded in a
 covering global algorithm with polynomial work per node
 (\cref{lem:recurrence}).
 
-\section{Search for compositional strategies}
+\section{Construction of local strategies}
 \label{sec:automation}
 \label{sec:overview}
 
@@ -277,7 +313,7 @@ following operations describe the search independently of the particular
 
 \begin{figure}[!htbp]
 \centering
-\begin{minipage}{0.86\linewidth}
+\begin{minipage}{\linewidth}
 \begin{lstlisting}
 frontier <- {root template}
 for each command in the analysis script:
@@ -291,8 +327,8 @@ assemble the certificate; check coverage, identities, and vectors
 \end{lstlisting}
 \end{minipage}
 \caption{The generation and checking pipeline. Refinements cover structural
-cases; a strategy search resolves cases when it finds a suitable branch or
-reduction. The script chooses the refinements and search budgets.}
+cases. A search resolves a case when it finds a strategy that meets the
+target.}
 \label{fig:pipeline}
 \end{figure}
 
@@ -332,15 +368,13 @@ $\{(0,1),(1,0)\}$. A group is exactly the image of its substitution.
 This representation supports constants and signed identifications, but not
 arbitrary Boolean constraints between the free variables.
 
-Substitution yields an ordinary residual CNF, together with an objective offset
-and an initial clause decrease. The residual search can apply reductions,
-branch on another variable, or stop with a call to the global algorithm.
-For each candidate branching variable (pivot), it searches both assignment
-children up to a requested depth and retains a deeper continuation when useful.
-This allows asymmetric strategies and makes
-the group's eventual cost depend on the residual structure it preserves.
-Clause-decreasing reductions can end in a call; implemented zero-decrease
-reductions eliminate a local variable before continuing.
+Substitution yields a residual CNF, an objective offset, and an initial
+clause decrease. For each group, the generator considers an immediate call
+and a continuation that applies the reduction rules to a fixed point. If the
+reductions decrease the clause count, that continuation ends in a call.
+Otherwise it can end in an imported lemma, a Step~5.1 assignment with two
+recursive calls, or a call on the reduced formula. Groups containing multiple
+assignments may also use an applicable import directly on their residual CNF.
 
 \subsection{Selection by continuation costs}
 \label{sec:fixed-target}
@@ -359,8 +393,28 @@ weight by $q^{-b}$, and recursive alternatives add their weights:
 Here $b+v$ adds $b$ to every vector entry, and $\Vert$ concatenates vectors.
 For each group, the generator can therefore retain its minimum-weight
 available continuation independently of the choices for other groups.
-\Cref{lem:weight-selection} formalizes this elementary separability property.
-It concerns the supplied candidates, not completeness of the residual search.
+\begin{lemma}[Independent continuation selection]
+\label{lem:weight-selection}
+Fix $q>1$ and a decomposition with incoming decreases $d_g$ for its
+alternatives $g=1,\ldots,k$. For each alternative let $\mathcal C_g$ be
+a finite nonempty set of available correct continuations, each with positive
+accumulated decreases after its incoming edge. Suppose these choices are
+independent. Then the minimum weight of the composed strategy is
+\begin{equation}
+ \min_{(S_g)\in\prod_g\mathcal C_g}
+   \sum_g q^{-d_g}C_q(S_g)
+ =\sum_g q^{-d_g}\min_{S_g\in\mathcal C_g}C_q(S_g).
+ \label{eq:independent-selection}
+\end{equation}
+\end{lemma}
+\begin{proof}
+By \cref{eq:weight-composition}, the left-hand objective is the weight bound
+for the composed strategy. Each coefficient $q^{-d_g}$ is positive, and
+each summand depends only on $S_g$. Choosing a minimizing continuation
+in every set $\mathcal C_g$ attains the right-hand side; every other
+choice has weight at least that value.
+\end{proof}
+The minimum is over the available continuations at the fixed target.
 
 Let $A$ be the undominated assignments and $G$ an available substitution
 image. If $b_G$ is its initial decrease and $S_G$ its retained continuation,
@@ -373,8 +427,8 @@ assign it cost $c_q(G)=q^{-b_G}C_q(S_G)$. The generator solves
 Groups may overlap and include dominated assignments. Every selected group
 contributes its full cost, and its complete substitution image is retained.
 The cover search is exhaustive over the supplied candidates, with exponential
-worst-case cost. Its result is also compared with ordinary one-level variable
-branching.
+worst-case cost. The script first tries separate alternatives for the
+undominated assignments and runs the grouped search on the unresolved cases.
 
 Standalone branching factors do not give the same ordering of continuations.
 For example, $(1,8)$ has smaller branching factor than $(2,5)$, but at
@@ -427,9 +481,9 @@ vector $\tau$, coverage and dominance give the local optimum identity
  \label{eq:example-identity}
 \end{equation}
 
-Stopping at all three residuals would fail the target test:
+The initial vector fails the target test since
 $W_{1.2872}((3,4,7))\approx1.003940>1$.
-The residual $H_0$, however, contains the $(1,1)$-variable $z$. For any fixed
+The residual $H_0$ contains the $(1,1)$-variable $z$. For any fixed
 tail values, choosing $z$ satisfies one of its two clauses and both whenever
 at least one of their tails is true. Thus replacing those clauses by
 $(\tail{8}\vee\tail{9})$ gives
@@ -452,6 +506,7 @@ formula remains in each of the three recursive calls.
 
 \begin{figure}[!htbp]
 \centering
+\begin{adjustbox}{max width=\linewidth}
 \begin{tikzpicture}[>=Stealth,
  every node/.style={align=center,font=\small},
  case/.style={draw,rounded corners=2pt,inner sep=6pt}]
@@ -465,6 +520,7 @@ formula remains in each of the three recursive calls.
  \draw[->] (p)--(h2);
  \draw[->] (h0)--node[right]{resolution on $z$}(r);
 \end{tikzpicture}
+\end{adjustbox}
 \caption{The generated decomposition initially has vector $(3,4,7)$.
 Resolution in its first residual improves the vector to $(4,4,7)$, meeting
 the target $1.2872$. Completions in which hidden literals in the two
@@ -472,7 +528,7 @@ $\bar x$-clauses also have degree five satisfy the degree condition of Step~5.4.
 \label{fig:example}
 \end{figure}
 
-\section{Correctness and verification}
+\section{Correctness of local certificates}
 \label{sec:verification}
 \label{sec:implementation-checker}
 
@@ -486,27 +542,121 @@ $s_i$, the central test is
 \end{equation}
 Children use only parent tails and local variables, with fresh variables
 chosen outside the complete instance. Tail-only clauses that remain are
-retained in the recursive formula. For any fixed external assignment, the
-identity preserves the best contribution of the local variables; maximizing
-over external assignments proves contextual correctness
-(\cref{lem:contextual-replacement}). The same test handles reductions,
-dominance elimination, and grouped branches.
+retained in the recursive formula.
 
-Composition has two distinct operations. Recursive alternatives contribute
-the sum of their shifted weights as in \cref{eq:weight-composition}.
-Structural refinements precede the strategies and describe different possible
-inputs. The checker validates every refinement child and checks each terminal
-strategy separately. Within a strategy, it accumulates decreases along each
-path and checks progress and the target inequality at its root. Reductions,
-including resolution, are represented by semantic decompositions and checked
-through \cref{eq:semantic-decomposition}. The local soundness theorem in
-\cref{thm:local-soundness} gives the formal
-guarantee relative to complete structural degree lists and applicable
-imported lemmas. The certificate rules and proof are in
-\cref{sec:certificate}.
+\begin{lemma}[Replacement inside a formula]
+\label{lem:contextual-replacement}
+Suppose \cref{eq:semantic-decomposition} holds and the local variables of the
+parent and children occur nowhere in the surrounding formula or the concrete
+tails. Then replacing $P[T]$ by the alternatives $(H_i[T],s_i)$ preserves the
+optimum of $P[T]\uplus E$.
+\end{lemma}
+\begin{proof}
+Fix an assignment $\beta$ to all external variables. It gives tail values
+$\tau_\beta$ and satisfies some $e(\beta)$ clauses in $E$. The parent optimum
+is
+\[
+ \max_\beta\bigl(e(\beta)+B_P(\tau_\beta)\bigr)
+ =\max_i\left(s_i+
+   \max_\beta\bigl(e(\beta)+B_{H_i}(\tau_\beta)\bigr)\right),
+\]
+using \cref{eq:semantic-decomposition}. The expression on the right is the
+best shifted optimum of a child in the same surrounding formula.
+\end{proof}
 
-The C++ generator logs refinements and chosen strategies. An assembler connects
-them into a certificate and rejects unresolved cases. A separate Python checker
+\paragraph{Assignment decomposition.}
+The alternatives assign a selected variable $x$ to $0$ and $1$. The checker
+simplifies both children and recomputes their offsets and decreases. Suppose
+an assignment leaves a displayed fragment $P_i$ and transfers a multiset $R_i$
+of tail-only clauses to the surrounding formula. Then
+\begin{equation}
+ F_i=P_i[T]\uplus E\uplus R_i[T],\qquad
+ d_i=|P|-|P_i|-|R_i|.
+ \label{eq:transfer}
+\end{equation}
+Satisfied clauses contribute to $s_i$; empty false clauses contribute only to
+$d_i$. The transferred clauses remain part of the recursive instance.
+For example, setting $x=0$ in $(x\vee\anytail)(\bar x)$ transfers $(\anytail)$ and gives
+$s=d=1$, even though no selected variable remains.
+
+\paragraph{Semantic decomposition.}
+The certificate supplies children $H_1,\ldots,H_r$ and offsets $s_i$. The
+checker accepts the transformation when
+\cref{eq:semantic-decomposition} holds.
+Every child uses only parent tails and selected or fresh local variables.
+Here the surrounding formula is unchanged, so tail-only clauses that remain
+must be included in $H_i$. The decrease is
+$d_i=|P|-|H_i|$. The generator represents its reduction rules as one-child
+semantic decompositions. The checker can infer the offset when
+$B_P-B_{H_1}$ is a constant nonnegative integer.
+
+\paragraph{Recursive call and imported lemma.}
+A \texttt{call} ends the local analysis and invokes the global algorithm on
+the remaining complete formula. The decrease accumulated along the path is
+the decrease of this leaf. An imported lemma application, encoded as
+\texttt{assumption}, records the lemma name, the formula, and the guaranteed
+decrease vector $v$ for the branching case. When the import applies, the
+source result guarantees either a reduction by at least one clause or a
+branching with decreases at least those of $v$. The generator ranks the
+import by the weight bound
+\begin{equation}
+ C_q(S)=\max\{q^{-1},W_q(v)\}.
+ \label{eq:import-weight}
+\end{equation}
+The checker recomputes this maximum exactly from $v$ and logs the application
+with its tree path. \Cref{tab:dependencies} identifies the source results.
+
+\subsection{Certificate composition}
+\label{sec:checker}
+
+A decomposition edge with decrease $d$ followed by a continuation $S$
+contributes $q^{-d}C_q(S)$ to the enclosing strategy by
+\cref{eq:weight-composition}. The checker computes the sum over recursive
+alternatives by shifting and concatenating their vectors. For each import
+it uses whichever of $(1)$ and $v$ attains the maximum in
+\cref{eq:import-weight}.
+The resulting vector encodes the weight bound. The checker requires its
+accumulated decreases to be positive and its weight to satisfy
+\cref{eq:target}. An intermediate reduction may have decrease zero.
+The certificate places refinements above the strategy roots. The checker
+checks each terminal strategy separately, so the maximum of their weight
+bounds applies to the whole family.
+
+\begin{theorem}[Local certificate soundness]
+\label{thm:local-soundness}
+Let a finite certificate pass the refinement, decomposition, and strategy
+checks above at target $q$. Assume complete exposure degree lists under
+the stated structural restrictions and a nonnegative accumulated decrease
+before every import. Assume each import's reduction-or-branch guarantee
+holds in every complete instance to which it is applied. Then every instance
+matching the root under these restrictions has an optimum-preserving
+local strategy whose accumulated decreases are
+$q$-admissible.
+\end{theorem}
+\begin{proof}
+Induct over the certificate. A tail split covers its parent, and variable
+exposure enumerates every permitted incidence pattern. Thus at least one
+refinement child applies to each matching instance. Assignment decomposition
+is exhaustive, with the clause accounting in \cref{eq:transfer}. Semantic
+decomposition preserves the optimum by \cref{lem:contextual-replacement}.
+This includes every recorded reduction, which is represented by a one-child
+semantic decomposition. Calls end a local path. At an import, the source
+guarantee gives positive local decreases and weight at most
+\cref{eq:import-weight}. The nonnegative incoming decrease preserves
+progress in either outcome. Edge decreases telescope and shift weights by
+\cref{eq:weight-composition}, so the checked weight bound at each strategy
+root also bounds the weight of its realized recursive calls. The root check
+ensures progress for explicit
+calls and establishes the target inequality for that structural case.
+Since the refinement tree covers the root family and every terminal case
+has a checked strategy, the conclusion holds throughout the family.
+\end{proof}
+
+\subsection{Implementation and checks}
+
+The C++ generator logs refinements and chosen strategies. An assembler checks
+the root family declaration and joins the records into a certificate. It
+rejects missing proof records. A separate Python checker
 implements template normalization, refinement enumeration, assignment
 simplification, local score tables, and exact rational weight arithmetic
 independently of the search. Its bottleneck profile additionally requires
@@ -517,16 +667,12 @@ $O(2^{a+t}\ell(P))$ time by enumeration. This work concerns the finite offline
 analysis. Once its certificate is fixed, local template sizes are constants
 with respect to the size of a future input instance.
 
-Imported lemma applications are recorded with their formulas, branching-case
-vectors, and locations. The checker recomputes a weight bound that covers
-both reduction and branching. Applicability under the source hypotheses
-remains a mathematical premise of acceptance.
-The implementation is not formally verified. Its acceptance establishes
-coverage and the explicit transitions and arithmetic, relative to the stated
-structural and imported-result premises. It does not certify that the search
-found an optimal strategy.
+The checker logs each imported lemma with its formula, branching vector,
+and location. Acceptance covers the explicit transitions, case enumeration,
+and weight arithmetic under the premises of \cref{thm:local-soundness}.
+The implementation itself has no formal verification.
 
-\section{Application to the \MaxSAT{} bottleneck}
+\section{Application to exact \MaxSAT{}}
 \label{sec:global}
 
 \subsection{The target case and its surrounding algorithm}
@@ -570,9 +716,11 @@ neighboring cases as well as Step~5.4. The allowed exposure classes are
  (2,3),\quad (4,1)\text{-singleton},
 \]
 with degrees oriented toward the exposed literal.
-The script first exposes $y$ in a clause containing $\bar x$, then $z$ in a
-clause containing $\bar x$ but not $y$, interleaving these refinements with
-strategy searches. A final tail split and search resolve the remaining cases.
+The script first exposes $y$ in a clause containing $\bar x$ and searches for
+strategies. It then exposes $z$ in a clause containing $\bar x$ and excluding
+the positive literal $y$, and searches again. For each remaining template,
+it chooses the tail split that minimizes the worse of the two child weight
+bounds found by grouped search. A final search resolves the resulting cases.
 
 
 Every instance reaching Step~5.4 belongs to this family. Before Step~5,
@@ -585,245 +733,9 @@ all possible exposures. Structural refinement reveals occurrences in that
 same instance, preserving these restrictions.
 
 The search uses the baseline Lemmas~2--4 and the composition from Step~5.5
-with the weight bound in \cref{eq:import-weight}. Step~5.1 uses a checked
-assignment decomposition (\cref{sec:strategies}).
-
-\subsection{Completed analysis}
-\label{sec:artifact}
-
-The checker accepts the completed certificate with verdict
-\texttt{ACCEPT BOTTLENECK RELATIVE TO IMPORTED LEMMAS}.
-\Cref{tab:artifact-summary} reports certificate size and offline costs.
-
-\begin{table}[!htbp]
-\centering\small
-\begin{tabular}{@{}lr@{}}
-\toprule
-Property & Value \\
-\midrule
-Structural refinements & 58 \\
-Strategy roots & 7,126 \\
-Certificate nodes & 41,825 \\
-Maximum depth & 9 \\
-Imported applications & 2,632 \\
-Generation, wall-clock seconds & 9.33 \\
-Assembly, wall-clock seconds & 8.36 \\
-Verification, wall-clock seconds & 33.45 \\
-\bottomrule
-\end{tabular}
-\caption{The completed analysis at $q=1.2872$.
-Imports are logged mathematical dependencies, not independently proved leaves.}
-\label{tab:artifact-summary}
-\end{table}
-
-The implementation and analysis artifacts are available in the
-\href{https://github.com/kisorimaD/maxsat_prover}{project repository}.
-Timings are single runs on an AMD Ryzen~7 5800U with Python~3.10.6 and
-NumPy~2.2.6.
-
-\subsection{Consequence for the baseline algorithm}
-
-A fixed certificate gives a finite dispatch procedure for the target family.
-A refinement inspects a concrete tail or scans a selected literal's
-occurrences and follows a matching child. All templates and strategies have
-fixed finite size, so matching and the recorded transformations take
-polynomial time and space in the input length. The offline search is not
-repeated when solving an input instance.
-
-\begin{theorem}[Global consequence]
-\label{thm:conditional-global}
-Suppose the completed certificate at $q=1.2872$ satisfies the premises of
-\cref{thm:local-soundness}, with the imported results applicable under their
-source hypotheses. Replacing Step~5.4 of the baseline algorithm by its
-recorded strategies solves \MaxSAT{} in $\OhStar(1.2872^m)$ time and
-polynomial space.
-\end{theorem}
-\begin{proof}
-The root covers Step~5.4, and local soundness supplies optimum-preserving
-strategies meeting the target. All other branching cases in
-\cref{tab:global-vectors} satisfy the same inequality. The terminal
-Step~7 uses $\OhStar(1.2576^m)$ time, within the target. Branching weights
-bound the sum of terminal costs by $\OhStar(q^m)$, and fixed-certificate
-dispatch has polynomial overhead. A depth-first traversal and the
-polynomial-space terminal routine preserve polynomial space.
-\end{proof}
-
-\section{Conclusion}
-\label{sec:conclusion}
-
-Substitution-based assignment groups let local strategy search continue on
-residual formulas and account for those continuations during weighted group
-selection. Our implementation produces a separately checked analysis of the
-\MaxSAT{} bottleneck at $q=1.2872$, relative to recorded imported lemmas.
-Applications to further local families require their own structural
-restrictions and, for global bounds, a covering recursive algorithm.
-
-\clearpage
-\appendix
-\section{Normalization conventions}
-\label{app:normalization}
-
-Before applying the recursive algorithm, remove duplicate literals within
-each clause. Remove tautological clauses with an objective offset of one
-each, and empty clauses with offset zero. The initial measure $m$ counts
-clauses after this normalization. Equal nonempty clauses are retained as
-distinct multiset occurrences. During a transformation, satisfied clauses
-contribute to both the objective offset and the measure decrease, whereas
-newly empty false clauses contribute only to the measure decrease. A
-tail-only clause remains in the recursive instance unless its emptiness or
-satisfaction is established.
-
-\section{Templates and certificate rules}
-\label{sec:certificate}
-
-This appendix details the certificate checks summarized in
-\cref{sec:verification}: refinements cover the relevant
-instances, and strategies preserve their optimum. We use $F$ for a complete
-recursive formula and $P$ for its displayed template.
-
-\subsection{Unknown tails and the surrounding formula}
-
-For a strategy transformation, not every tail identifier of the parent need
-occur in a child; every identifier that does occur must come from the parent.
-The checked score identity justifies any disappearance of local clauses or
-tails. Structural refinement has a different role. When a variable is exposed
-from a tail, the child's tail describes the remainder after that exposure, and
-the displayed fragment may acquire further clauses from $E$. Matching is
-always interpreted on the same complete instance, even though its displayed
-fragment changes.
-
-The local score $B_P(\tau)$ from \cref{eq:local-score} lets the checker compare
-such transformations without constructing a complete formula for each choice
-of external clauses.
-
-\subsection{Structural refinements}
-\label{sec:refinements}
-
-Refinements distinguish formula structure without making a Boolean assignment.
-The two basic operations are shown in \cref{fig:refinement}.
-
-\begin{figure}[!htbp]
-\centering
-\begin{tikzpicture}[>=Stealth,every node/.style={font=\small,align=center}]
- \node (p) at (0,0) {$(C\vee\anytail)$};
- \node (empty) at (-2.1,-1.2) {$(C)$};
- \node (nonempty) at (2.1,-1.2) {$(C\vee\plustail)$};
- \node (expose) at (2.1,-2.5) {$(C\vee y\vee\anytail)$\\and every placement of the other occurrences of $y$};
- \draw[->] (p)--node[above left]{empty tail}(empty);
- \draw[->] (p)--node[above right]{nonempty tail}(nonempty);
- \draw[->] (nonempty)--node[right]{expose a literal $y$}(expose);
-\end{tikzpicture}
-\caption{Topological refinement nodes. If $C$ is nonempty, the left child is
-an ordinary clause, not an empty clause. After exposing one literal from
-$\plustail$, the remaining tail is $\anytail$ and may be empty.}
-\label{fig:refinement}
-\end{figure}
-
-\paragraph{Tail split.}
-Replace a chosen $\anytail$ by the two cases ``empty'' and $\plustail$. These cover every
-concrete tail. This is recorded as \texttt{tail\_empty\_or\_nonempty}.
-
-\paragraph{Variable exposure.}
-An analysis specifies a finite set of \emph{allowed oriented degrees}
-$(i,j)$ for the literal selected from a clause tail. The orientation counts
-occurrences of that literal first and its complement second. In our case this
-set consists of five classes, listed in \cref{sec:configuration}. Its
-completeness follows from the structural assumptions inherited from the baseline
-ordered algorithm, not from a bound on clause width.
-Choose a literal from a nonempty tail and name it $y$. For each degree in
-this set, enumerate all placements of $y$ and $\bar y$ in
-existing clause tails, and add clauses for the remaining occurrences.
-The selected clause must contain $y$; singleton restrictions fix the unique
-negative occurrence to a unit clause. The remaining tail in each affected
-clause may be empty. Each concrete occurrence pattern is among these choices,
-provided the degree list covers the literals that can be selected.
-
-The format combines a tail split and these exposures in
-\texttt{expose\_at\_clause}: an empty child is included for $\anytail$ and omitted
-for $\plustail$. Exposure is restricted to templates with distinct, clause-local
-single tails. An initial variable declaration constructs the root family;
-it is not a refinement of arbitrary formulas.
-
-The coverage requirement can be stated without a separate semantics for
-fragments: \emph{every complete instance matching the parent and its
-structural restrictions must match at least one child}. Exposing $y$ merely
-moves all its occurrences into the displayed fragment of that same instance.
-The checker regenerates the child templates, compares them up to renaming,
-and rejects missing, extra, or duplicate cases. In format version~2 the
-allowed degree list is recorded in the exposure node. Its completeness under
-the intended structural restrictions is a mathematical premise, whereas
-faithful enumeration of its incidences is checked computationally.
-
-\subsection{Local strategies}
-\label{sec:strategies}
-
-The certificate consists of a structural refinement tree whose terminal
-cases each carry a strategy. A strategy uses decompositions, recursive calls,
-and applications of four named imported rules. Refinements are checked in the
-outer tree; strategy nodes do not contain further structural refinements.
-Decompositions have two forms.
-
-\paragraph{Assignment decomposition.}
-The alternatives assign a selected variable $x$ to $0$ and $1$. The checker
-simplifies both children and recomputes their offsets and decreases. Suppose
-an assignment leaves a displayed fragment $P_i$ and transfers a multiset $R_i$
-of tail-only clauses to the surrounding formula. Then
-\begin{equation}
- F_i=P_i[T]\uplus E\uplus R_i[T],\qquad
- d_i=|P|-|P_i|-|R_i|.
- \label{eq:transfer}
-\end{equation}
-Satisfied clauses contribute to $s_i$; empty false clauses contribute only to
-$d_i$. The transferred clauses remain part of the recursive instance.
-For example, setting $x=0$ in $(x\vee\anytail)(\bar x)$ transfers $(\anytail)$ and gives
-$s=d=1$, even though no selected variable remains.
-
-\paragraph{Semantic decomposition.}
-The certificate supplies children $H_1,\ldots,H_r$ and offsets $s_i$. The
-checker accepts the transformation when
-\cref{eq:semantic-decomposition} holds.
-Every child uses only parent tails and selected or fresh local variables.
-Here the surrounding formula is unchanged, so tail-only clauses that remain
-must be included in $H_i$. The decrease is
-$d_i=|P|-|H_i|$. A one-child decomposition describes a reduction; its offset
-can also be inferred if $B_P-B_{H_1}$ is a constant nonnegative integer.
-
-\Needspace{13\baselineskip}
-\begin{lemma}[Replacement inside a formula]
-\label{lem:contextual-replacement}
-Suppose \cref{eq:semantic-decomposition} holds and the local variables of the
-parent and children occur nowhere in the surrounding formula or the concrete
-tails. Then replacing $P[T]$ by the alternatives $(H_i[T],s_i)$ preserves the
-optimum of $P[T]\uplus E$.
-\end{lemma}
-\begin{proof}
-Fix an assignment $\beta$ to all external variables. It gives tail values
-$\tau_\beta$ and satisfies some $e(\beta)$ clauses in $E$. The parent optimum
-is
-\[
- \max_\beta\bigl(e(\beta)+B_P(\tau_\beta)\bigr)
- =\max_i\left(s_i+
-   \max_\beta\bigl(e(\beta)+B_{H_i}(\tau_\beta)\bigr)\right),
-\]
-using \cref{eq:semantic-decomposition}. The expression on the right is the
-best shifted optimum of a child in the same surrounding formula.
-\end{proof}
-
-\paragraph{Recursive call and imported lemma.}
-A \texttt{call} ends the local analysis and invokes the global algorithm on
-the remaining complete formula. The decrease accumulated along the path is
-the decrease of this leaf. An imported lemma application, encoded as
-\texttt{assumption}, records the lemma name, the formula, and the guaranteed
-decrease vector $v$ for the branching case. When the import applies, the
-source result guarantees either a reduction by at least one clause or a
-branching with decreases at least those of $v$. The generator ranks the
-import by the weight bound
-\begin{equation}
- C_q(S)=\max\{q^{-1},W_q(v)\}.
- \label{eq:import-weight}
-\end{equation}
-The checker recomputes this maximum exactly from $v$ and logs the application
-with its tree path. \Cref{tab:dependencies} identifies the source results.
+with the weight bound in \cref{eq:import-weight}. \Cref{tab:dependencies}
+lists the source results. Step~5.1 uses a checked assignment decomposition
+(\cref{sec:strategies}).
 
 \begin{table}[!htbp]
 \centering\small
@@ -872,6 +784,166 @@ weight is bounded by $W_q(8,9,2)$. A reduction at the first application
 gives a single decrease of at least one. Thus \cref{eq:import-weight} with
 $v=(8,9,2)$ bounds all three outcomes.
 
+\subsection{Completed analysis}
+\label{sec:artifact}
+
+The checker accepts the completed certificate with verdict
+\texttt{ACCEPT BOTTLENECK RELATIVE TO IMPORTED LEMMAS}.
+The accumulated decrease at entry to every import is nonnegative.
+\Cref{tab:artifact-summary} reports certificate size and offline costs.
+
+\begin{table}[!htbp]
+\centering\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+Property & Value \\
+\midrule
+Structural refinements & 58 \\
+Strategy roots & 7,126 \\
+Certificate nodes & 40,890 \\
+Maximum depth & 9 \\
+Imported applications & 2,632 \\
+Generation, wall-clock seconds & 5.65 \\
+Assembly, wall-clock seconds & 8.14 \\
+Verification, wall-clock seconds & 29.86 \\
+\bottomrule
+\end{tabular}
+\caption{The completed analysis at $q=1.2872$.
+Imports are logged mathematical dependencies, not independently proved leaves.}
+\label{tab:artifact-summary}
+\end{table}
+
+The implementation and analysis artifacts are available in the
+\href{https://github.com/kisorimaD/maxsat_prover}{project repository}.
+The command \texttt{make certificate} runs the analysis in \texttt{solve.txt},
+assembles the certificate, and invokes the checker.
+Timings are single runs on an AMD Ryzen~7 5800U with Python~3.10.6 and
+NumPy~2.2.6.
+
+\subsection{Consequence for the baseline algorithm}
+
+A fixed certificate gives a finite dispatch procedure for the target family.
+A refinement inspects a concrete tail or scans a selected literal's
+occurrences and follows a matching child. All templates and strategies have
+fixed finite size, so matching and the recorded transformations take
+polynomial time and space in the input length. The offline search is not
+repeated when solving an input instance.
+
+\begin{theorem}[Global consequence]
+\label{thm:conditional-global}
+Suppose the completed certificate at $q=1.2872$ satisfies the premises of
+\cref{thm:local-soundness}, with the imported results applicable under their
+source hypotheses. Replacing Step~5.4 of the baseline algorithm by its
+recorded strategies solves \MaxSAT{} in $\OhStar(1.2872^m)$ time and
+polynomial space.
+\end{theorem}
+\begin{proof}
+The root covers Step~5.4, and local soundness supplies optimum-preserving
+strategies meeting the target. All other branching cases in
+\cref{tab:global-vectors} satisfy the same inequality. The terminal
+Step~7 uses $\OhStar(1.2576^m)$ time, within the target. Branching weights
+bound the sum of terminal costs by $\OhStar(q^m)$, and fixed-certificate
+dispatch has polynomial overhead. A depth-first traversal and the
+polynomial-space terminal routine preserve polynomial space.
+\end{proof}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+Substitution-based assignment groups let local strategy search continue on
+residual formulas and account for those continuations during weighted group
+selection. Our implementation produces a separately checked analysis of the
+\MaxSAT{} bottleneck at $q=1.2872$, relative to recorded imported lemmas.
+An application to another local family would require a root template,
+refinements covering that family, and a recursive algorithm that handles
+the resulting instances.
+
+\appendix
+\section{Templates and certificate rules}
+\label{sec:certificate}
+
+This appendix details the certificate checks summarized in
+\cref{sec:verification}: refinements cover the relevant
+instances, and strategies preserve their optimum. We use $F$ for a complete
+recursive formula and $P$ for its displayed template.
+
+\subsection{Unknown tails and the surrounding formula}
+
+For a strategy transformation, not every tail identifier of the parent need
+occur in a child; every identifier that does occur must come from the parent.
+The checked score identity justifies any disappearance of local clauses or
+tails. Structural refinement has a different role. When a variable is exposed
+from a tail, the child's tail describes the remainder after that exposure, and
+the displayed fragment may acquire further clauses from $E$. Matching is
+always interpreted on the same complete instance, even though its displayed
+fragment changes.
+
+The local score $B_P(\tau)$ from \cref{eq:local-score} lets the checker compare
+such transformations without constructing a complete formula for each choice
+of external clauses.
+
+\subsection{Structural refinements}
+\label{sec:refinements}
+
+Refinements distinguish formula structure without making a Boolean assignment.
+The two basic operations are shown in \cref{fig:refinement}.
+
+\begin{figure}[!htbp]
+\centering
+\begin{adjustbox}{max width=\linewidth}
+\begin{tikzpicture}[>=Stealth,every node/.style={font=\small,align=center}]
+ \node (p) at (0,0) {$(C\vee\anytail)$};
+ \node (empty) at (-2.1,-1.2) {$(C)$};
+ \node (nonempty) at (2.1,-1.2) {$(C\vee\plustail)$};
+ \node (expose) at (2.1,-2.5) {$(C\vee y\vee\anytail)$\\and every placement of the other occurrences of $y$};
+ \draw[->] (p)--node[above left]{empty tail}(empty);
+ \draw[->] (p)--node[above right]{nonempty tail}(nonempty);
+ \draw[->] (nonempty)--node[right]{expose a literal $y$}(expose);
+\end{tikzpicture}
+\end{adjustbox}
+\caption{Topological refinement nodes. If $C$ is nonempty, the left child is
+an ordinary clause, not an empty clause. After exposing one literal from
+$\plustail$, the remaining tail is $\anytail$ and may be empty.}
+\label{fig:refinement}
+\end{figure}
+
+\paragraph{Tail split.}
+Replace a chosen $\anytail$ by the two cases ``empty'' and $\plustail$. These cover every
+concrete tail. This is recorded as \texttt{tail\_empty\_or\_nonempty}.
+
+\paragraph{Variable exposure.}
+An analysis specifies a finite set of \emph{allowed oriented degrees}
+$(i,j)$ for the literal selected from a clause tail. The orientation counts
+occurrences of that literal first and its complement second. In our case this
+set consists of five classes, listed in \cref{sec:configuration}. Its
+completeness follows from the structural assumptions inherited from the baseline
+ordered algorithm, not from a bound on clause width.
+Choose a literal from a nonempty tail and name it $y$. For each degree in
+this set, enumerate all placements of $y$ and $\bar y$ in
+existing clause tails, and add clauses for the remaining occurrences.
+The selected clause must contain $y$; singleton restrictions fix the unique
+negative occurrence to a unit clause. The remaining tail in each affected
+clause may be empty. Each concrete occurrence pattern is among these choices,
+provided the degree list covers the literals that can be selected.
+
+The operation \texttt{expose\_at\_clause} combines exposure with a tail split.
+It includes an empty child for $\anytail$ and omits it for $\plustail$. Exposure is restricted to templates with distinct, clause-local
+single tails. An initial variable declaration constructs the root family;
+it is not a refinement of arbitrary formulas.
+
+The coverage requirement can be stated without a separate semantics for
+fragments: \emph{every complete instance matching the parent and its
+structural restrictions must match at least one child}. Exposing $y$ merely
+moves all its occurrences into the displayed fragment of that same instance.
+The checker regenerates the child templates, compares them up to renaming,
+and rejects missing, extra, or duplicate cases. In format version~2 the
+allowed degree list is recorded in the exposure node. Its completeness under
+the intended structural restrictions is a mathematical premise, whereas
+faithful enumeration of its incidences is checked computationally.
+
+\subsection{The unit-clause case}
+\label{sec:strategies}
+
 \paragraph{Explicit assignment proof for Step~5.1.}
 For a $(3,2)$-literal whose minority literal has a unit occurrence, the
 strategy assigns the underlying variable in both ways. Setting the dominant
@@ -881,78 +953,8 @@ assignment satisfies the two minority clauses, giving a decrease of at least
 two. The generator records an ordinary assignment decomposition, and the
 checker reconstructs both residual formulas, offsets, and actual decreases.
 Any tail-only clauses remain in the complete recursive formulas according to
-\cref{eq:transfer}. This realizes the $(4,2)$ guarantee without a separate
-lemma-embedding operation or imported assumption.
-
-\subsection{Composition and soundness}
-\label{sec:checker}
-
-A decomposition edge with decrease $d$ followed by a continuation $S$
-contributes $q^{-d}C_q(S)$ to the enclosing strategy by
-\cref{eq:weight-composition}. The checker computes the sum over recursive
-alternatives by shifting and concatenating their vectors. For each import
-it uses whichever of $(1)$ and $v$ attains the maximum in
-\cref{eq:import-weight}.
-The resulting vector encodes the weight bound. The checker requires its
-accumulated decreases to be positive and its weight to satisfy
-\cref{eq:target}. An intermediate reduction may have decrease zero.
-Each terminal strategy in the refinement tree is checked separately, so
-the maximum of their weight bounds applies to the whole family.
-
-\begin{lemma}[Independent continuation selection]
-\label{lem:weight-selection}
-Fix $q>1$ and a decomposition with incoming decreases $d_g$ for its
-alternatives $g=1,\ldots,k$. For each alternative let $\mathcal C_g$ be
-a finite nonempty set of available correct continuations, each with positive
-accumulated decreases after its incoming edge. Suppose these choices are
-independent. Then the minimum weight of the composed strategy is
-\begin{equation}
- \min_{(S_g)\in\prod_g\mathcal C_g}
-   \sum_g q^{-d_g}C_q(S_g)
- =\sum_g q^{-d_g}\min_{S_g\in\mathcal C_g}C_q(S_g).
- \label{eq:independent-selection}
-\end{equation}
-\end{lemma}
-\begin{proof}
-By \cref{eq:weight-composition}, the left-hand objective is the weight bound
-for the composed strategy. Each coefficient $q^{-d_g}$ is positive, and
-each summand depends only on $S_g$. Choosing a minimizing continuation
-in every set $\mathcal C_g$ attains the right-hand side; every other
-choice has weight at least that value.
-\end{proof}
-The statement concerns the available continuations at a fixed target.
-It does not assert that a bounded search discovers all possible strategies.
-
-\Needspace{17\baselineskip}
-\begin{theorem}[Local certificate soundness]
-\label{thm:local-soundness}
-Let a finite certificate pass the refinement, decomposition, and strategy
-checks above at target $q$. Assume complete exposure degree lists under
-the stated structural restrictions and a nonnegative accumulated decrease
-before every import. Assume each import's reduction-or-branch guarantee
-holds in every complete instance to which it is applied. Then every instance
-matching the root under these restrictions has an optimum-preserving
-local strategy whose accumulated decreases are
-$q$-admissible.
-\end{theorem}
-\begin{proof}
-Induct over the certificate. A tail split covers its parent, and variable
-exposure enumerates every permitted incidence pattern. Thus at least one
-refinement child applies to each matching instance. Assignment decomposition
-is exhaustive, with the clause accounting in \cref{eq:transfer}. Semantic
-decomposition preserves the optimum by \cref{lem:contextual-replacement}.
-This includes every recorded reduction, which is represented by a one-child
-semantic decomposition. Calls end a local path. At an import, the source
-guarantee gives positive local decreases and weight at most
-\cref{eq:import-weight}. The nonnegative incoming decrease preserves
-progress in either outcome. Edge decreases telescope and shift weights by
-\cref{eq:weight-composition}, so the checked weight bound at each strategy
-root also bounds the weight of its realized recursive calls. The root check
-ensures progress for explicit
-calls and establishes the target inequality for that structural case.
-Since the refinement tree covers the root family and every terminal case
-has a checked strategy, the conclusion holds throughout the family.
-\end{proof}
+\cref{eq:transfer}. The assignment proof therefore realizes the $(4,2)$
+guarantee.
 
 \section{Retained recurrences}
 \label{app:recurrences}
@@ -1015,6 +1017,12 @@ Sergey S. Fedin and Alexander S. Kulikov.
 \newblock Automated proofs of upper bounds on the running time of splitting algorithms.
 \newblock In \emph{IWPEC}, volume 3162 of LNCS, pages 248--259, 2004.
 \newblock \href{https://doi.org/10.1007/978-3-540-28639-4_22}{doi:10.1007/978-3-540-28639-4\_22}.
+
+\bibitem{KulikovFedinPOMI2004}
+Alexander S. Kulikov and Sergey S. Fedin.
+\newblock Automated proofs of upper bounds on the running time of splitting algorithms.
+\newblock Zapiski Nauchnykh Seminarov POMI 316 (2004), 111--128 (in Russian).
+\newblock \url{https://www.mathnet.ru/eng/znsl728}.
 
 \bibitem{Kulikov2005}
 Alexander S. Kulikov.
